@@ -1,14 +1,171 @@
+--[[
+    @File:      SoundWidget.lua
+    @Project:   Prat-3.0 / AceGUISharedMediaWidgets
+
+    BR: Widget AceGUI para seleção e prévia de sons registrados no LibSharedMedia.
+        - Usado por opções com dialogControl = "LSM30_Sound"
+        - Exibe lista de sons disponíveis
+        - Permite pré-escutar sons pelo ícone de alto-falante
+        - Mantém chaves internas do LibSharedMedia intactas
+        - Localiza apenas rótulos exibidos ao usuário
+
+    EN: AceGUI widget for selecting and previewing LibSharedMedia sounds.
+        - Used by options with dialogControl = "LSM30_Sound"
+        - Displays the available sound list
+        - Allows previewing sounds through the speaker icon
+        - Keeps LibSharedMedia internal keys intact
+        - Localizes only user-facing labels
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
 -- Widget is based on the AceGUIWidget-DropDown.lua supplied with AceGUI-3.0
 -- Widget created by Yssaril
+
 
 local AceGUI = LibStub("AceGUI-3.0")
 local Media = LibStub("LibSharedMedia-3.0")
 
 local AGSMW = LibStub("AceGUISharedMediaWidgets-1.0")
 
+--[[------------------------------------------------
+	BR: Localização mínima do widget.
+		A chave interna do som continua sendo "None"; somente o texto
+		exibido ao usuário muda conforme o idioma.
+	EN: Minimal widget localization.
+		The internal sound key remains "None"; only the text displayed
+		to the user changes according to locale.
+------------------------------------------------]]--
+local locale = GetLocale()
+
+local L = {
+	-- ============================================================================
+	-- EN: File: widgets/SoundWidget.lua | Language: English (enUS)
+	-- EN: File: widgets/SoundWidget.lua | Language: English (enUS)
+	-- ============================================================================
+	enUS = {
+		None = "None",
+	},
+
+	-- ============================================================================
+	-- BR: Arquivo: widgets/SoundWidget.lua | Idioma: Português Brasil (ptBR)
+	-- EN: File: widgets/SoundWidget.lua | Language: Brazilian Portuguese (ptBR)
+	-- ============================================================================
+	ptBR = {
+		None = "Nenhum",
+	},
+
+	-- ============================================================================
+	-- PT: Ficheiro: widgets/SoundWidget.lua | Idioma: Português Europeu (ptPT)
+	-- EN: File: widgets/SoundWidget.lua | Language: European Portuguese (ptPT)
+	-- ============================================================================
+	ptPT = {
+		None = "Nenhum",
+	},
+
+	-- ============================================================================
+	-- ES: Archivo: widgets/SoundWidget.lua | Idioma: Español (España) (esES)
+	-- EN: File: widgets/SoundWidget.lua | Language: Spanish (Spain) (esES)
+	-- ============================================================================
+	esES = {
+		None = "Ninguno",
+	},
+
+	-- ============================================================================
+	-- ES: Archivo: widgets/SoundWidget.lua | Idioma: Español (Latinoamérica) (esMX)
+	-- EN: File: widgets/SoundWidget.lua | Language: Latin American Spanish (esMX)
+	-- ============================================================================
+	esMX = {
+		None = "Ninguno",
+	},
+
+	-- ============================================================================
+	-- FR: Fichier: widgets/SoundWidget.lua | Langue: Français (frFR)
+	-- EN: File: widgets/SoundWidget.lua | Language: French (frFR)
+	-- ============================================================================
+	frFR = {
+		None = "Aucun",
+	},
+
+	-- ============================================================================
+	-- IT: File: widgets/SoundWidget.lua | Lingua: Italiano (itIT)
+	-- EN: File: widgets/SoundWidget.lua | Language: Italian (itIT)
+	-- ============================================================================
+	itIT = {
+		None = "Nessuno",
+	},
+
+	-- ============================================================================
+	-- DE: Datei: widgets/SoundWidget.lua | Sprache: Deutsch (deDE)
+	-- EN: File: widgets/SoundWidget.lua | Language: German (deDE)
+	-- ============================================================================
+	deDE = {
+		None = "Nichts",
+	},
+
+	-- ============================================================================
+	-- RU: Файл: widgets/SoundWidget.lua | Язык: Русский (ruRU)
+	-- EN: File: widgets/SoundWidget.lua | Language: Russian (ruRU)
+	-- ============================================================================
+	ruRU = {
+		None = "Нет",
+	},
+
+	-- ============================================================================
+	-- KO: 파일: widgets/SoundWidget.lua | 언어: 한국어 (koKR)
+	-- EN: File: widgets/SoundWidget.lua | Language: Korean (koKR)
+	-- ============================================================================
+	koKR = {
+		None = "없음",
+	},
+
+	-- ============================================================================
+	-- ZH: 文件: widgets/SoundWidget.lua | 语言: 简体中文 (zhCN)
+	-- EN: File: widgets/SoundWidget.lua | Language: Simplified Chinese (zhCN)
+	-- ============================================================================
+	zhCN = {
+		None = "无",
+	},
+
+	-- ============================================================================
+	-- ZH: 檔案: widgets/SoundWidget.lua | 語言: 繁體中文 (zhTW)
+	-- EN: File: widgets/SoundWidget.lua | Language: Traditional Chinese (zhTW)
+	-- ============================================================================
+	zhTW = {
+		None = "無",
+	},
+}
+
+local activeLocale = L[locale] or L.enUS
+
+local function GetDisplayText(key)
+	if key == "None" then
+		return activeLocale.None or key
+	end
+
+	return activeLocale[key] or key
+end
+
+local function GetInternalKey(self, displayText)
+	if not self or not self.list then
+		return displayText
+	end
+
+	for key in pairs(self.list) do
+		if GetDisplayText(key) == displayText then
+			return key
+		end
+	end
+
+	return displayText
+end
+
 do
 	local widgetType = "LSM30_Sound"
-	local widgetVersion = 13
+	local widgetVersion = 1301 -- BR/EN: Prat localized/fixed fork
 
 	local contentFrameCache = {}
 	local function ReturnSelf(self)
@@ -20,7 +177,7 @@ do
 
 	local function ContentOnClick(this, button)
 		local self = this.obj
-		self:Fire("OnValueChanged", this.text:GetText())
+		self:Fire("OnValueChanged", this.value)
 		if self.dropdown then
 			self.dropdown = AGSMW:ReturnDropDownFrame(self.dropdown)
 		end
@@ -28,8 +185,13 @@ do
 
 	local function ContentSpeakerOnClick(this, button)
 		local self = this.frame.obj
-		local sound = this.frame.text:GetText()
-		PlaySoundFile(self.list[sound] ~= sound and self.list[sound] or Media:Fetch('sound',sound), "Master")
+		local sound = this.frame.value
+
+		if not sound then
+			return
+		end
+
+		PlaySoundFile(self.list[sound] ~= sound and self.list[sound] or Media:Fetch("sound", sound), "Master")
 	end
 
 	local function GetContentLine()
@@ -99,10 +261,8 @@ do
 	end
 
 	local function SetValue(self, value) -- Set the value to an item in the List.
-		if self.list then
-			self:SetText(value or "")
-		end
 		self.value = value
+		self:SetText(value or "")
 	end
 
 	local function GetValue(self)
@@ -114,7 +274,7 @@ do
 	end
 
 	local function SetText(self, text) -- Set the text displayed in the box.
-		self.frame.text:SetText(text or "")
+		self.frame.text:SetText(text and GetDisplayText(text) or "")
 	end
 
 	local function SetLabel(self, text) -- Set the text for the label.
@@ -166,7 +326,8 @@ do
 			table.sort(sortedlist, textSort)
 			for i, k in ipairs(sortedlist) do
 				local f = GetContentLine()
-				f.text:SetText(k)
+				f.value = k
+				f.text:SetText(GetDisplayText(k))
 				if k == self.value then
 					f.check:Show()
 				end
@@ -200,8 +361,13 @@ do
 
 	local function WidgetPlaySound(this)
 		local self = this.obj
-		local sound = self.frame.text:GetText()
-		PlaySoundFile(self.list[sound] ~= sound and self.list[sound] or Media:Fetch('sound',sound), "Master")
+		local sound = self.value
+
+		if not sound then
+			return
+		end
+
+		PlaySoundFile(self.list[sound] ~= sound and self.list[sound] or Media:Fetch("sound", sound), "Master")
 	end
 
 	local function Constructor()
