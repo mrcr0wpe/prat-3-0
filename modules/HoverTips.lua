@@ -1,164 +1,245 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      HoverTips.lua
+    @Project:   Prat-3.0
 
+    BR: Exibe tooltips ao passar o mouse sobre links do chat.
+        - Suporte a itens, encantamentos, magias, missões e conquistas
+        - Suporte a moedas e mascotes de batalha
+        - Hooks em hyperlinks das janelas de chat
+        - Tooltip ancorado no cursor
+        - Limpeza preventiva de tooltips residuais
+
+    EN: Displays tooltips when hovering over chat links.
+        - Supports items, enchants, spells, quests and achievements
+        - Supports currencies and battle pets
+        - Hooks chat window hyperlinks
+        - Tooltip anchored to the cursor
+        - Preventive cleanup of residual tooltips
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Compatibilidade entre APIs antigas e modernas de janelas de chat
+    EN: Compatibility between old and modern chat window APIs
+------------------------------------------------]]--
+local num_chat_windows = NUM_CHAT_WINDOWS or Constants.ChatFrameConstants.MaxChatWindows
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
-  local PRAT_MODULE = Prat:RequestModuleName("HoverTips")
+	--[[------------------------------------------------
+		BR: Criação do módulo de tooltips flutuantes
+		EN: Creation of the hover tooltip module
+	------------------------------------------------]]--
+	local module = Prat:NewModule("HoverTips", "AceHook-3.0")
 
-  if PRAT_MODULE == nil then
-    return
-  end
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
 
-  local module = Prat:NewModule(PRAT_MODULE, "AceHook-3.0")
+	--[[------------------------------------------------
+		BR: Valores padrão do módulo
+		EN: Module default values
+	------------------------------------------------]]--
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = true,
+		}
+	})
 
-  -- define localized strings
-  local PL = module.PL
+	--[[------------------------------------------------
+		BR: Interface de configuração do módulo
+		EN: Module configuration interface
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module.name, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		childGroups = "tab",
+		args = {
+			overview = {
+				type = "group",
+				name = PL["overview_tab_name"],
+				desc = PL["overview_tab_desc"],
+				order = 10,
+				args = {
+					full_description = {
+						type = "description",
+						name = PL["full_description"],
+						order = 10,
+						width = "full",
+					},
 
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["module_name"] = "Hover Tips",
-    ["module_desc"] = "Shows tooltip when hovering over link in chat",
-  })
-  --@end-debug@
+					quick_guide_header = {
+						type = "header",
+						name = PL["quick_guide_header"],
+						order = 20,
+					},
 
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
+					quick_guide = {
+						type = "description",
+						name = PL["quick_guide"],
+						order = 30,
+						width = "full",
+					},
+				},
+			},
 
+			supported_links = {
+				type = "group",
+				name = PL["supported_links_tab_name"],
+				desc = PL["supported_links_tab_desc"],
+				order = 100,
+				args = {
+					supported_links_help = {
+						type = "description",
+						name = PL["supported_links_help"],
+						order = 10,
+						width = "full",
+					},
+				},
+			},
+		},
+	})
 
-  --[===[@non-debug@
-do
-    local L
+	--[[------------------------------------------------
+		BR: Tipos de hyperlinks suportados pelo tooltip
+		EN: Hyperlink types supported by the tooltip
+	------------------------------------------------]]--
+	local link_types = {
+		item = true,
+		enchant = true,
+		spell = true,
+		quest = true,
+		achievement = true,
+		currency = true,
+		battlepet = true,
+	}
 
+	--[[------------------------------------------------
+		BR: Controle do tooltip atualmente exibido
+		EN: Tracks the tooltip currently being displayed
+	------------------------------------------------]]--
+	local showing_tooltip = false
 
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "enUS", L)
+	--[[------------------------------------------------
+		BR: Instala hooks de hyperlink em todas as janelas de chat
+		EN: Installs hyperlink hooks on all chat windows
+	------------------------------------------------]]--
+	function module:enable_hover_tips()
+		for i = 1, num_chat_windows do
+			local frame = _G["ChatFrame" .. i]
+			if frame and not self:IsHooked(frame, "OnHyperlinkEnter") then
+				self:HookScript(frame, "OnHyperlinkEnter", "on_hyperlink_enter")
+			end
+			if frame and not self:IsHooked(frame, "OnHyperlinkLeave") then
+				self:HookScript(frame, "OnHyperlinkLeave", "on_hyperlink_leave")
+			end
+		end
+	end
 
+	--[[------------------------------------------------
+		BR: Remove hooks instalados pelo módulo
+		EN: Removes hooks installed by the module
+	------------------------------------------------]]--
+	function module:disable_hover_tips()
+		for i = 1, num_chat_windows do
+			local frame = _G["ChatFrame" .. i]
+			if frame and self:IsHooked(frame, "OnHyperlinkEnter") then
+				self:Unhook(frame, "OnHyperlinkEnter")
+			end
+			if frame and self:IsHooked(frame, "OnHyperlinkLeave") then
+				self:Unhook(frame, "OnHyperlinkLeave")
+			end
+		end
+	end
 
+	--[[------------------------------------------------
+		BR: Ativação do módulo pelo padrão Prat
+		EN: Module activation using the Prat convention
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		self:enable_hover_tips()
+	end
 
---@localization(locale="itIT", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "itIT", L)
+	--[[------------------------------------------------
+		BR: Desativação do módulo pelo padrão Prat
+		EN: Module deactivation using the Prat convention
+	------------------------------------------------]]--
+	function module:OnModuleDisable()
+		self:disable_hover_tips()
+	end
 
+	--[[------------------------------------------------
+		BR: Compatibilidade com o padrão AceAddon original deste módulo
+		EN: Compatibility with this module's original AceAddon pattern
+	------------------------------------------------]]--
+	function module:OnEnable()
+		self:enable_hover_tips()
+	end
 
+	function module:OnDisable()
+		self:disable_hover_tips()
+	end
 
---@localization(locale="ptBR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "ptBR", L)
+	--[[------------------------------------------------
+		BR: Retorna descrição localizada do módulo
+		EN: Returns localized module description
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
 
+	--[[------------------------------------------------
+		BR: Exibe tooltip apropriado ao passar mouse sobre hyperlink
+		EN: Displays the appropriate tooltip when hovering hyperlinks
+	------------------------------------------------]]--
+	function module:on_hyperlink_enter(_, link, text)
+		local link_type = link and link:match("^([^:]+):")
 
+		-- BR: Evita que tooltips de NPC deixem barras de vida ou resíduos visuais.
+		-- EN: Prevents NPC tooltips from leaving health bars or visual leftovers.
+		GameTooltip:Hide()
 
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "frFR", L)
+		if link_type == "battlepet" then
+			showing_tooltip = BattlePetTooltip
+			GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
+			BattlePetToolTip_ShowLink(text)
+		elseif link_types[link_type] then
+			showing_tooltip = GameTooltip
+			GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
+			GameTooltip:SetHyperlink(link)
+			GameTooltip:Show()
+		end
+	end
 
+	--[[------------------------------------------------
+		BR: Fecha tooltip ao sair do hyperlink
+		EN: Hides tooltip when leaving the hyperlink
+	------------------------------------------------]]--
+	function module:on_hyperlink_leave()
+		if showing_tooltip then
+			showing_tooltip:Hide()
+			showing_tooltip = false
+		end
+	end
 
+	--[[------------------------------------------------
+		BR: Aliases legados para reduzir risco com chamadas antigas/hooks por string
+		EN: Legacy aliases to reduce risk from older calls/string hooks
+	------------------------------------------------]]--
+	module.OnHyperlinkEnter = module.on_hyperlink_enter
+	module.OnHyperlinkLeave = module.on_hyperlink_leave
+	module.EnableHoverTips = module.enable_hover_tips
+	module.DisableHoverTips = module.disable_hover_tips
 
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "deDE", L)
-
-
-
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "koKR",  L)
-
-
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "esMX",  L)
-
-
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "ruRU",  L)
-
-
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "zhCN",  L)
-
-
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "esES",  L)
-
-
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="HoverTips")@
-PL:AddLocale(PRAT_MODULE, "zhTW",  L)
-end
---@end-non-debug@]===]
-
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = true,
-    }
-  })
-
-  -- basic code from Chatter
-
-  local strmatch = string.match
-  local linkTypes = {
-    item = true,
-    enchant = true,
-    spell = true,
-    quest = true,
-    achievement = true,
-    currency = true,
-    battlepet = true,
-  }
-
-  function module:OnEnable()
-    for i = 1, NUM_CHAT_WINDOWS do
-      local frame = _G["ChatFrame" .. i]
-      self:HookScript(frame, "OnHyperlinkEnter", OnHyperlinkEnter)
-      self:HookScript(frame, "OnHyperlinkLeave", OnHyperlinkLeave)
-    end
-  end
-
-  function module:OnDisable()
-    for i = 1, NUM_CHAT_WINDOWS do
-      local frame = _G["ChatFrame" .. i]
-      self:Unhook(frame, "OnHyperlinkEnter")
-      self:Unhook(frame, "OnHyperlinkLeave")
-    end
-  end
-
-  local showingTooltip = false
-  function module:OnHyperlinkEnter(f, link, text)
-    local t = strmatch(link, "^(.-):")
-    if linkTypes[t] then
-      if t == "battlepet" then
-        showingTooltip = BattlePetTooltip
-        GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
-        BattlePetToolTip_ShowLink(text)
-      else
-        showingTooltip = GameTooltip
-        ShowUIPanel(GameTooltip)
-        GameTooltip:SetOwner(UIParent, "ANCHOR_CURSOR")
-        GameTooltip:SetHyperlink(link)
-        GameTooltip:Show()
-      end
-    end
-  end
-
-  function module:OnHyperlinkLeave(f, link)
-    if showingTooltip then
-      showingTooltip:Hide()
-      showingTooltip = false
-    end
-  end
+	return
 end)
