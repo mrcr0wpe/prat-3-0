@@ -1,178 +1,146 @@
-﻿---------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      Keybindings.lua
+    @Project:   Prat-3.0
 
+    BR: Registra nomes e funções auxiliares dos atalhos de teclado do Prat.
+        - Localiza os nomes exibidos no painel de atalhos do WoW
+        - Mantém correspondência com os bindings definidos em Bindings.xml
+        - Atalhos para canais principais e canais numerados
+        - Atalho para copiar a janela de bate-papo selecionada
+        - Atalho para alternar para a próxima guia de bate-papo
+        - Integração com o sistema global de atalhos de teclado do WoW
+
+    EN: Registers labels and helper functions for Prat keyboard shortcuts.
+        - Localizes labels shown in WoW's keybindings panel
+        - Matches bindings defined in Bindings.xml
+        - Bindings for main channels and numbered channels
+        - Binding for copying the selected chat window
+        - Binding for switching to the next chat tab
+        - Integration with WoW's global keybinding system
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
+	--[[------------------------------------------------
+		BR: Criação do módulo auxiliar de atalhos de teclado
+		EN: Creation of the keyboard shortcuts helper module
+	------------------------------------------------]]--
+	local module = Prat:NewModule("KeyBindings")
 
-  -- Get Utility Libraries
-  local PRAT_MODULE = Prat:RequestModuleName("KeyBindings")
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
 
-  if PRAT_MODULE == nil then
-    return
-  end
+	--[[------------------------------------------------
+		BR: Registra os nomes exibidos no painel de atalhos do WoW.
 
-  local module = Prat:NewModule(PRAT_MODULE)
+		IMPORTANTE:
+		Estas variáveis precisam corresponder aos nomes definidos em Bindings.xml.
+		Exemplo:
+		<Binding name="PRAT_GUILD"> usa BINDING_NAME_PRAT_GUILD.
 
-  local PL = module.PL
+		EN: Registers the labels shown in WoW's keybindings panel.
 
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    module_desc = "Adds chat related keybindings",
-    ["Prat Keybindings"] = true,
-    ["Officer Channel"] = true,
-    ["Guild Channel"] = true,
-    ["Party Channel"] = true,
-    ["Raid Channel"] = true,
-    ["Raid Warning Channel"] = true,
-    ["Instance Channel"] = true,
-    ["Say"] = true,
-    ["Yell"] = true,
-    ["Whisper"] = true,
-    ["Channel %d"] = true,
-    ["Prat TellTarget"] = true,
-    ["TellTarget"] = true,
-    ["Prat CopyChat"] = true,
-    ["Copy Selected Chat Frame"] = true,
-    ["Smart Group Channel"] = true,
-    ["Next Chat Tab"] = true
-  })
-  --@end-debug@
+		IMPORTANT:
+		These variables must match the names defined in Bindings.xml.
+		Example:
+		<Binding name="PRAT_GUILD"> uses BINDING_NAME_PRAT_GUILD.
+	------------------------------------------------]]--
+	Prat:SetModuleInit(module, function()
+		BINDING_HEADER_Prat = PL["binding_header_name"]
 
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-  --[===[@non-debug@
- do
-     local L
+		BINDING_NAME_PRAT_OFFICER = PL["officer_channel_name"]
+		BINDING_NAME_PRAT_GUILD = PL["guild_channel_name"]
+		BINDING_NAME_PRAT_PARTY = PL["party_channel_name"]
+		BINDING_NAME_PRAT_RAID = PL["raid_channel_name"]
+		BINDING_NAME_PRAT_RAIDWARN = PL["raid_warning_channel_name"]
+		BINDING_NAME_PRAT_INSTANCE = PL["instance_channel_name"]
+		BINDING_NAME_PRAT_SAY = PL["say_name"]
+		BINDING_NAME_PRAT_YELL = PL["yell_name"]
+		BINDING_NAME_PRAT_WHISPER = PL["whisper_name"]
 
- 
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
+		BINDING_NAME_PRAT_CHANNEL_ONE = (PL["channel_name_format"]):format(1)
+		BINDING_NAME_PRAT_CHANNEL_TWO = (PL["channel_name_format"]):format(2)
+		BINDING_NAME_PRAT_CHANNEL_THREE = (PL["channel_name_format"]):format(3)
+		BINDING_NAME_PRAT_CHANNEL_FOUR = (PL["channel_name_format"]):format(4)
+		BINDING_NAME_PRAT_CHANNEL_FIVE = (PL["channel_name_format"]):format(5)
+		BINDING_NAME_PRAT_CHANNEL_SIX = (PL["channel_name_format"]):format(6)
+		BINDING_NAME_PRAT_CHANNEL_SEVEN = (PL["channel_name_format"]):format(7)
+		BINDING_NAME_PRAT_CHANNEL_EIGHT = (PL["channel_name_format"]):format(8)
+		BINDING_NAME_PRAT_CHANNEL_NINE = (PL["channel_name_format"]):format(9)
 
-   PL:AddLocale(PRAT_MODULE, "enUS",L)
+		BINDING_NAME_PRAT_SMARTGROUP = PL["smart_group_channel_name"]
+		BINDING_NAME_PRAT_NEXTTAB = PL["next_chat_tab_name"]
+		BINDING_NAME_PRAT_COPYSELECTED = PL["copy_selected_chat_frame_name"]
+		BINDING_NAME_PRAT_TELLTARGET = PL["tell_target_name"]
+		BINDING_NAME_PRAT_SCROLLBOTTOM = PL["scroll_to_bottom_name"]
+		BINDING_NAME_PRAT_SCROLLTOP = PL["scroll_to_top_name"]
+	end)
 
+	--[[------------------------------------------------
+		BR: Retorna a descrição localizada do módulo para o controle de módulos.
+		EN: Returns the localized module description for module control.
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
 
- 
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
+	--[[------------------------------------------------
+		BR: Alterna para a próxima guia dockada do bate-papo.
 
-   PL:AddLocale(PRAT_MODULE, "frFR",L)
+		Usado pelo binding PRAT_NEXTTAB definido em Bindings.xml.
+		Se não houver guia selecionada ou lista de janelas dockadas, a função encerra
+		sem erro para evitar problemas em estados incomuns da interface.
 
+		EN: Switches to the next docked chat tab.
 
- 
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
+		Used by the PRAT_NEXTTAB binding defined in Bindings.xml.
+		If there is no selected tab or docked window list, the function exits
+		without error to avoid issues in unusual UI states.
+	------------------------------------------------]]--
+	function module:CycleChatTabs()
+		if not FCFDock_GetSelectedWindow or not FCFDock_GetChatFrames then
+			return
+		end
 
-   PL:AddLocale(PRAT_MODULE, "deDE",L)
+		local current = FCFDock_GetSelectedWindow(GENERAL_CHAT_DOCK)
+		local dockedFrames = FCFDock_GetChatFrames(GENERAL_CHAT_DOCK)
 
+		if not current or not dockedFrames then
+			return
+		end
 
- 
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
+		local index
+		for i, frame in ipairs(dockedFrames) do
+			if frame == current then
+				index = i
+				break
+			end
+		end
 
-   PL:AddLocale(PRAT_MODULE, "koKR",L)
+		if not index then
+			return
+		end
 
+		index = index + 1
+		if not dockedFrames[index] then
+			index = 1
+		end
 
- 
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
+		if dockedFrames[index] then
+			FCFDock_SelectWindow(GENERAL_CHAT_DOCK, dockedFrames[index])
+		end
+	end
 
-   PL:AddLocale(PRAT_MODULE, "esMX",L)
-
-
- 
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
-
-   PL:AddLocale(PRAT_MODULE, "ruRU",L)
-
-
- 
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
-
-   PL:AddLocale(PRAT_MODULE, "zhCN",L)
-
-
- 
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
-
-   PL:AddLocale(PRAT_MODULE, "esES",L)
-
-
- 
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="KeyBindings")@
-
-   PL:AddLocale(PRAT_MODULE, "zhTW",L)
-
-
- end
- --@end-non-debug@]===]
-
-
-  Prat:SetModuleInit(module,
-    function(self)
-      BINDING_HEADER_Prat = PL["Prat Keybindings"]
-      BINDING_NAME_officer = PL["Officer Channel"]
-      BINDING_NAME_guild = PL["Guild Channel"]
-      BINDING_NAME_party = PL["Party Channel"]
-      BINDING_NAME_raid = PL["Raid Channel"]
-      BINDING_NAME_raidwarn = PL["Raid Warning Channel"]
-      BINDING_NAME_instance = PL["Instance Channel"]
-      BINDING_NAME_say = PL["Say"]
-      BINDING_NAME_yell = PL["Yell"]
-      BINDING_NAME_whisper = PL["Whisper"]
-      BINDING_NAME_one = (PL["Channel %d"]):format(1)
-      BINDING_NAME_two = (PL["Channel %d"]):format(2)
-      BINDING_NAME_three = (PL["Channel %d"]):format(3)
-      BINDING_NAME_four = (PL["Channel %d"]):format(4)
-      BINDING_NAME_five = (PL["Channel %d"]):format(5)
-      BINDING_NAME_six = (PL["Channel %d"]):format(6)
-      BINDING_NAME_seven = (PL["Channel %d"]):format(7)
-      BINDING_NAME_eight = (PL["Channel %d"]):format(8)
-      BINDING_NAME_nine = (PL["Channel %d"]):format(9)
-      BINDING_NAME_SmartGroup = PL["Smart Group Channel"]
-      --	    BINDING_HEADER_Prat_TellTarget = PL["Prat TellTarget"]
-      --	    BINDING_HEADER_Prat_CopyChat = PL["Prat CopyChat"]
-      BINDING_NAME_NextTab = PL["Next Chat Tab"]
-      BINDING_NAME_CopySelected = PL["Copy Selected Chat Frame"]
-    end)
-
-  -- /script keybindings:CycleChatTabs()
-  function module:CycleChatTabs()
-    local current = FCFDock_GetSelectedWindow(GENERAL_CHAT_DOCK)
-    local idx
-    local dockedFrames = FCFDock_GetChatFrames(GENERAL_CHAT_DOCK)
-
-    for i, v in ipairs(dockedFrames) do
-      if v == current then
-        idx = i
-      end
-    end
-
-    if idx == nil then return end
-
-    idx = idx + 1
-    if dockedFrames[idx] == nil then
-      idx = 1
-    end
-
-    FCFDock_SelectWindow(GENERAL_CHAT_DOCK, dockedFrames[idx])
-  end
-
-  return
+	return
 end) -- Prat:AddModuleToLoad
