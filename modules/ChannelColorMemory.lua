@@ -1,262 +1,254 @@
-﻿---------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat modules
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- moduleify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc., 
--- 51 Franklin Street, Fifth Floor, 
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      ChannelColorMemory.lua
+    @Project:   Prat-3.0
 
+    BR: Memória de cores dos canais de chat.
+        - Salva cores associadas aos nomes dos canais
+        - Restaura cores ao reencontrar/reentrar em canais
+        - Sincroniza cores após mudanças manuais
+        - Mantém canais por nome, independentemente do número atual
 
+    EN: Chat channel color memory.
+        - Saves colors associated with channel names
+        - Restores colors when channels are found or rejoined
+        - Synchronizes colors after manual changes
+        - Tracks channels by name, regardless of their current number
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
+	--[[------------------------------------------------
+		BR: Criação do módulo de memória de cores dos canais
+		EN: Creation of the channel color memory module
+	------------------------------------------------]]--
+	local module = Prat:NewModule("ChannelColorMemory", "AceEvent-3.0")
 
-  local PRAT_MODULE = Prat:RequestModuleName("ChannelColorMemory")
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
 
-  if PRAT_MODULE == nil then
-    return
-  end
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = true,
+			colors = {},
+		}
+	})
 
-  local module = Prat:NewModule(PRAT_MODULE, "AceEvent-3.0")
+	--[[------------------------------------------------
+		BR: Configuração das opções da interface do módulo
+		EN: Module interface options configuration
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module.name, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		args = {
+			info_group = {
+				type = "group",
+				name = PL["info_group_name"],
+				desc = PL["info_group_desc"],
+				inline = true,
+				order = 100,
+				args = {
+					info = {
+						type = "description",
+						name = PL["info_text"],
+						order = 10,
+						width = "full",
+					},
 
-  local PL = module.PL
+					info_spacer = {
+						type = "description",
+						name = " ",
+						order = 20,
+						width = "full",
+					},
 
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["ChannelColorMemory"] = true,
-    ["Remembers the colors of each channel name."] = true,
-    ["(%w+)%s?(.*)"] = "([^%s]+)%s?(.*)",
-  })
-  --@end-debug@
+					note = {
+						type = "description",
+						name = PL["info_note"],
+						order = 30,
+						width = "full",
+					},
+				}
+			}
+		}
+	})
 
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-  --[===[@non-debug@
- do
-     local L
+	--[[------------------------------------------------
+		BR: Ativação do módulo, eventos e restauração inicial das cores
+		EN: Module activation, events and initial color restoration
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		self:RegisterEvent("UPDATE_CHAT_COLOR")
+		self:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
+		self.zone_chan_idx = {}
 
- 
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+		-- BR: Atualiza nomes antigos salvos para minúsculas.
+		-- EN: Upgrades old saved channel names to lowercase.
+		for channel_name, color in pairs(self.db.profile.colors) do
+			local normalized_name = channel_name:lower()
+			if channel_name ~= normalized_name then
+				self.db.profile.colors[normalized_name] = color
+			end
+		end
 
-   PL:AddLocale(PRAT_MODULE, "enUS",L)
+		self:restore_all_chat_colors()
+	end
 
+	--[[------------------------------------------------
+		BR: Retorna a descrição localizada do módulo
+		EN: Returns the localized module description
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
 
- 
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+	--[[------------------------------------------------
+		BR: Indexa canais do servidor pelo número atual da janela de chat
+		EN: Indexes server channels by the current chat window number
+	------------------------------------------------]]--
+	function module:index_server_channels()
+		for _, frame in pairs(Prat.HookedFrames) do
+			local channels = { GetChatWindowChannels(frame:GetID()) }
+			for i = 1, #channels, 2 do
+				local channel_name, channel_number = channels[i], channels[i + 1]
+				if tonumber(channel_number) and tonumber(channel_number) > 0 then
+					self.zone_chan_idx[tostring(channel_number)] = tostring(channel_name)
+				end
+			end
+		end
+	end
 
-   PL:AddLocale(PRAT_MODULE, "frFR",L)
+	--[[------------------------------------------------
+		BR: Restaura cores salvas para todos os canais conhecidos
+		EN: Restores saved colors for all known channels
+	------------------------------------------------]]--
+	function module:restore_all_chat_colors()
+		for _, frame in pairs(Prat.HookedFrames) do
+			local channels = { GetChatWindowChannels(frame:GetID()) }
+			for i = 1, #channels, 2 do
+				local channel_name, channel_number = channels[i], channels[i + 1]
 
+				if tonumber(channel_number) and tonumber(channel_number) > 0 then
+					self.zone_chan_idx[tostring(channel_number)] = tostring(channel_name)
+				end
 
- 
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+				if channel_name and channel_name:len() > 0 then
+					local color = self.db.profile.colors[channel_name:lower()]
+					if color then
+						local active_channel_number = Prat.GetChannelName(channel_name)
+						if active_channel_number then
+							ChangeChatColor("CHANNEL" .. active_channel_number, color.r, color.g, color.b)
+						end
+					end
+				end
+			end
+		end
+	end
 
-   PL:AddLocale(PRAT_MODULE, "deDE",L)
+	--[[------------------------------------------------
+		BR: Resolve o nome real do canal conforme a lista do servidor
+		EN: Resolves the real channel name from the server channel list
+	------------------------------------------------]]--
+	local function get_server_channel_name(name)
+		local channels = { EnumerateServerChannels() }
+		for _, channel_name in pairs(channels) do
+			if channel_name:lower() == name:lower() then
+				return channel_name
+			end
+		end
+	end
 
+	--[[------------------------------------------------
+		BR: Salva alterações manuais de cor feitas pelo usuário
+		EN: Saves manual color changes made by the user
+	------------------------------------------------]]--
+	function module:UPDATE_CHAT_COLOR(_, chat_type, cr, cg, cb)
+		if not chat_type then
+			return
+		end
 
- 
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+		local channel_number = chat_type:match("CHANNEL(%d+)")
+		if not channel_number then
+			return
+		end
 
-   PL:AddLocale(PRAT_MODULE, "koKR",L)
+		local _, channel_name = Prat.GetChannelName(channel_number)
+		if not channel_name then
+			return
+		end
 
+		local zone_suffix
+		channel_name, zone_suffix = channel_name:match(PL["channel_name_pattern"])
 
- 
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+		if zone_suffix and zone_suffix:len() > 0 then
+			channel_name = get_server_channel_name(channel_name)
+		end
 
-   PL:AddLocale(PRAT_MODULE, "esMX",L)
+		if not channel_name then
+			return
+		end
 
+		local color = self.db.profile.colors[channel_name:lower()]
+		if not color then
+			self.db.profile.colors[channel_name:lower()] = { r = cr, g = cg, b = cb }
+		else
+			color.r = cr
+			color.g = cg
+			color.b = cb
+		end
+	end
 
- 
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+	--[[------------------------------------------------
+		BR: Restaura ou registra cores quando o jogador entra/sai de canais
+		EN: Restores or records colors when the player joins/leaves channels
+	------------------------------------------------]]--
+	function module:CHAT_MSG_CHANNEL_NOTICE(_, notice_type, _, _, _, _, _, server_channel_id, number, channel_name)
+		if issecretvalue and issecretvalue(notice_type) then
+			return
+		end
 
-   PL:AddLocale(PRAT_MODULE, "ruRU",L)
+		if tonumber(server_channel_id) and tonumber(server_channel_id) > 0 then
+			channel_name = self.zone_chan_idx[tostring(server_channel_id)]
 
+			if not channel_name then
+				self:index_server_channels()
+				channel_name = self.zone_chan_idx[tostring(server_channel_id)]
+			end
+		end
 
- 
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
+		if number == nil or channel_name == nil then
+			return
+		elseif notice_type == "YOU_JOINED" then
+			local color = self.db.profile.colors[channel_name:lower()]
+			if color then
+				ChangeChatColor("CHANNEL" .. number, color.r, color.g, color.b)
+			end
+		elseif notice_type == "YOU_LEFT" then
+			local color = self.db.profile.colors[channel_name:lower()]
+			if color then
+				ChangeChatColor("CHANNEL" .. number, 1.0, 0.75, 0.75)
+			else
+				color = ChatTypeInfo["CHANNEL" .. number]
+				-- BR: A cor pode não existir se o número for 0.
+				-- EN: The color may not exist if the number is 0.
+				if color then
+					self.db.profile.colors[channel_name:lower()] = { r = color.r, g = color.g, b = color.b }
+				end
+			end
+		end
+	end
 
-   PL:AddLocale(PRAT_MODULE, "zhCN",L)
-
-
- 
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
-
-   PL:AddLocale(PRAT_MODULE, "esES",L)
-
-
- 
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="ChannelColorMemory")@
-
-   PL:AddLocale(PRAT_MODULE, "zhTW",L)
-
-
- end
- --@end-non-debug@]===]
-
-
-
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = true,
-      colors = {},
-    }
-  })
-
-  Prat:SetModuleOptions(module.name, {
-    name = PL["ChannelColorMemory"],
-    desc = PL["Remembers the colors of each channel name."],
-    type = "group",
-    args = {
-      info = {
-        name = "This module remembers what color you give to a channel with a particular name, so that if you rejoin the channel, no matter what number it is, it will always have the same color.",
-        type = "description",
-      }
-    }
-  })
-
-  --[[------------------------------------------------
-      Moduleule Event Functions
-  ------------------------------------------------]] --
-
-  -- things to do when the moduleule is enabled
-  function module:OnModuleEnable()
-    self:RegisterEvent("UPDATE_CHAT_COLOR")
-    self:RegisterEvent("CHAT_MSG_CHANNEL_NOTICE")
-    self.zoneChanIdx = {}
-
-    -- upgrade saved channel names to lowercase only
-    for k, v in pairs(self.db.profile.colors) do
-      if k ~= k:lower() then
-        self.db.profile.colors[k:lower()] = v
-      end
-    end
-    self:RestoreAllChatColors()
-  end
-
-  function module:GetDescription()
-    return PL["Remembers the colors of each channel name."]
-  end
-
-  function module:IndexServerChannels()
-    for k, v in pairs(Prat.HookedFrames) do
-      local t = { GetChatWindowChannels(v:GetID()) }
-      for i = 1, #t, 2 do
-        local chan, num = t[i], t[i + 1]
-        if tonumber(num) and tonumber(num) > 0 then
-          self.zoneChanIdx[tostring(num)] = tostring(chan)
-        end
-      end
-    end
-  end
-
-  function module:RestoreAllChatColors()
-    for k, v in pairs(Prat.HookedFrames) do
-      local t = { GetChatWindowChannels(v:GetID()) }
-      for i = 1, #t, 2 do
-        local chan, num = t[i], t[i + 1]
-        if tonumber(num) and tonumber(num) > 0 then
-          self.zoneChanIdx[tostring(num)] = tostring(chan)
-        end
-        if chan and chan:len() > 0 then
-          local color = self.db.profile.colors[chan:lower()];
-          if color then
-            local number = Prat.GetChannelName(chan);
-            if number then
-              ChangeChatColor("CHANNEL" .. number, color.r, color.g, color.b);
-            end
-          end
-        end
-      end
-    end
-  end
-
-  --[[------------------------------------------------
-      Core Functions
-  ------------------------------------------------]] --
-
-
-  local function getServerChan(name)
-    local t = { EnumerateServerChannels() }
-    for _, channame in pairs(t) do
-      if channame:lower() == name:lower() then
-        return channame
-      end
-    end
-  end
-
-
-  function module:UPDATE_CHAT_COLOR(evt, ChatType, cr, cg, cb)
-    if (ChatType) then
-      local number = ChatType:match("CHANNEL(%d+)")
-      if (number) then
-        local _, name = Prat.GetChannelName(number);
-        if (name) then
-          local name, zoneSuffix = name:match(PL["(%w+)%s?(.*)"]);
-          if zoneSuffix and zoneSuffix:len() > 0 then
-            local cname = name
-
-            name = getServerChan(name)
-          end
-
-          if not name then return end
-
-          local color = self.db.profile.colors[name:lower()];
-          if (not color) then
-            self.db.profile.colors[name:lower()] = { r = cr, g = cg, b = cb };
-          else
-            color.r = cr
-            color.g = cg
-            color.b = cb
-          end
-        end
-      end
-    end
-  end
-
-  function module:CHAT_MSG_CHANNEL_NOTICE(evt, NoticeType, Sender, Language, LongName, Target, Flags, ServChanID,
-  number, cname, unknown, counter)
-    if tonumber(ServChanID) > 0 then
-      cname = self.zoneChanIdx[tostring(ServChanID)]
-
-      if not cname then
-        self:IndexServerChannels()
-
-        cname = self.zoneChanIdx[tostring(ServChanID)]
-      end
-    end
-
-    if number == nil or cname == nil then
-      return
-    elseif (NoticeType == "YOU_JOINED") then
-      local color = self.db.profile.colors[cname:lower()];
-      if (color) then
-        ChangeChatColor("CHANNEL" .. number, color.r, color.g, color.b);
-      end
-    elseif (NoticeType == "YOU_LEFT") then
-      local color = self.db.profile.colors[cname:lower()];
-      if (color) then
-        ChangeChatColor("CHANNEL" .. number, 1.0, 0.75, 0.75);
-      else
-        color = ChatTypeInfo["CHANNEL" .. number];
-        self.db.profile.colors[cname:lower()] = { r = color.r, g = color.g, b = color.b };
-      end
-    end
-  end
-
-  return
+	return
 end) -- Prat:AddModuleToLoad
