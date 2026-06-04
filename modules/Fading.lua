@@ -1,198 +1,236 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      Fading.lua
+    @Project:   Prat-3.0
+
+    BR: Controle do esmaecimento gradual do texto do bate-papo.
+        - Ativação/desativação do esmaecimento por janela
+        - Configuração do tempo de visibilidade das mensagens
+        - Integração automática com novas janelas de bate-papo
+        - Compatibilidade com o sistema padrão da Blizzard
+
+    EN: Chat text fading control.
+        - Enable/disable fading per chat frame
+        - Text visibility duration configuration
+        - Automatic integration with new chat windows
+        - Compatibility with Blizzard's default fading system
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
+    --[[------------------------------------------------
+        BR: Criação do módulo de esmaecimento das mensagens
+        EN: Creation of the message fading module
+    ------------------------------------------------]]--
+    local module = Prat:NewModule("Fading")
 
-  local Prat = Prat
+    --[[------------------------------------------------
+        BR: Referência local às strings centralizadas de localização
+        EN: Local reference to centralized localization strings
+    ------------------------------------------------]]--
+    local PL = module.PL
 
-  local PRAT_MODULE = Prat:RequestModuleName("Fading")
+    --[[------------------------------------------------
+        BR: Valores padrão do módulo
+        EN: Module default values
+    ------------------------------------------------]]--
+    Prat:SetModuleDefaults(module.name, {
+        profile = {
+            on = true,
+            text_fade = { ["*"] = true },
+            duration = 120,
+        }
+    })
 
-  if PRAT_MODULE == nil then
+    --[[------------------------------------------------
+        BR: Migra chaves antigas de profile para snake_case
+        EN: Migrates old profile keys to snake_case
+    ------------------------------------------------]]--
+    local function migrate_profile(profile)
+        if not profile then
+            return
+        end
+
+        if profile.textfade ~= nil and profile.text_fade == nil then
+            profile.text_fade = profile.textfade
+        end
+        profile.textfade = nil
+
+        if profile.text_fade == nil then
+            profile.text_fade = { ["*"] = true }
+        end
+
+        if profile.duration == nil then
+            profile.duration = 120
+        end
+    end
+
+    --[[------------------------------------------------
+        BR: Configuração da interface do módulo
+        EN: Module interface options configuration
+    ------------------------------------------------]]--
+    Prat:SetModuleOptions(module.name, {
+        name = PL["module_name"],
+        desc = PL["module_desc"],
+        type = "group",
+        childGroups = "tab",
+        args = {
+            overview = {
+                type = "group",
+                name = PL["overview_tab_name"],
+                desc = PL["overview_tab_desc"],
+                order = 10,
+                args = {
+                    full_description = {
+                        type = "description",
+                        name = PL["full_description"],
+                        order = 10,
+                        width = "full",
+                    },
+
+                    quick_guide_header = {
+                        type = "header",
+                        name = PL["quick_guide_header"],
+                        order = 20,
+                    },
+
+                    quick_guide = {
+                        type = "description",
+                        name = PL["quick_guide"],
+                        order = 30,
+                        width = "full",
+                    },
+                },
+            },
+
+            windows = {
+                type = "group",
+                name = PL["windows_tab_name"],
+                desc = PL["windows_tab_desc"],
+                order = 100,
+                args = {
+                    windows_help = {
+                        type = "description",
+                        name = PL["windows_help"],
+                        order = 10,
+                        width = "full",
+                    },
+
+                    text_fade = {
+                        name = PL["text_fade_name"],
+                        desc = PL["text_fade_desc"],
+                        type = "multiselect",
+                        order = 20,
+                        width = "full",
+                        values = Prat.HookedFrameList,
+                        get = "GetSubValue",
+                        set = "SetSubValue",
+                    },
+                }
+            },
+
+            timing = {
+                type = "group",
+                name = PL["timing_tab_name"],
+                desc = PL["timing_tab_desc"],
+                order = 200,
+                args = {
+                    timing_help = {
+                        type = "description",
+                        name = PL["timing_help"],
+                        order = 10,
+                        width = "full",
+                    },
+
+                    duration = {
+                        name = PL["duration_name"],
+                        desc = PL["duration_desc"],
+                        type = "range",
+                        order = 20,
+                        width = 1.2,
+                        min = 1,
+                        max = 240,
+                        step = 1,
+                    },
+                }
+            },
+        }
+    })
+
+    --[[------------------------------------------------
+        BR: Ativação do módulo e integração com atualização de frames
+        EN: Module activation and frame update integration
+    ------------------------------------------------]]--
+    function module:OnModuleEnable()
+        migrate_profile(self.db.profile)
+
+        self:OnValueChanged()
+        Prat.RegisterChatEvent(self, Prat.Events.FRAMES_UPDATED)
+    end
+
+    --[[------------------------------------------------
+        BR: Restaura fading padrão da Blizzard ao desabilitar o módulo
+        EN: Restores Blizzard default fading when disabling the module
+    ------------------------------------------------]]--
+    function module:OnModuleDisable()
+        for _, frame in pairs(Prat.HookedFrames) do
+            self:fade(frame, true)
+        end
+    end
+
+    --[[------------------------------------------------
+        BR: Aplica configuração em novas janelas registradas pelo Prat
+        EN: Applies configuration to newly registered Prat chat frames
+    ------------------------------------------------]]--
+    function module:Prat_FramesUpdated(_, name, chat_frame)
+        migrate_profile(self.db.profile)
+
+        self:fade(chat_frame, self.db.profile.text_fade[name])
+    end
+
+    --[[------------------------------------------------
+        BR: Reaplica configuração em todas as janelas após alterações
+        EN: Reapplies configuration to all windows after changes
+    ------------------------------------------------]]--
+    function module:OnValueChanged()
+        migrate_profile(self.db.profile)
+
+        for name, frame in pairs(Prat.HookedFrames) do
+            self:fade(frame, self.db.profile.text_fade[name])
+        end
+    end
+
+    --[[------------------------------------------------
+        BR: Callback de alteração de subvalor usado pelo AceConfig
+        EN: Sub-value change callback used by AceConfig
+    ------------------------------------------------]]--
+    module.OnSubValueChanged = module.OnValueChanged
+
+    --[[------------------------------------------------
+        BR: Aplica ou remove esmaecimento em uma janela de chat
+        EN: Applies or removes fading on one chat frame
+    ------------------------------------------------]]--
+    function module:fade(chat_frame, text_fade)
+        if text_fade then
+            chat_frame:SetFading(true)
+            chat_frame:SetTimeVisible(module.db.profile.duration)
+        else
+            chat_frame:SetFading(false)
+        end
+    end
+
+    --[[------------------------------------------------
+        BR: Alias legado para reduzir risco com chamadas antigas
+        EN: Legacy alias to reduce risk from older calls
+    ------------------------------------------------]]--
+    module.Fade = module.fade
+
     return
-  end
-
-  local mod = Prat:NewModule(PRAT_MODULE)
-
-  local PL = mod.PL
-
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["module_name"] = "Fading",
-    ["module_desc"] = "Chat window text fading options.",
-    ["textfade_name"] = "Enable Fading",
-    ["textfade_desc"] = "Toggle enabling text fading for each chat window.",
-    ["duration_name"] = "Set Fading Delay (Seconds)",
-    ["duration_desc"] = "Set the number of seconds to wait before before fading text of chat windows.",
-  })
-  --@end-debug@
-
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-  --[===[@non-debug@
-  do
-      local L
-
-  
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "enUS",L)
-
-
-  
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "frFR",L)
-
-
-  
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "deDE",L)
-
-
-  
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "koKR",L)
-
-
-  
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "esMX",L)
-
-
-  
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "ruRU",L)
-
-
-  
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "zhCN",L)
-
-
-  
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "esES",L)
-
-
-  
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Fading")@
-
-    PL:AddLocale(PRAT_MODULE, "zhTW",L)
-
-
-  end
-  --@end-non-debug@]===]
-
-
-
-  -- define the default db values
-  Prat:SetModuleDefaults(mod.name, {
-    profile = {
-      on = true,
-      textfade = { ["*"] = true },
-      duration = 120
-    }
-  })
-
-  Prat:SetModuleOptions(mod.name, {
-    name = PL["module_name"],
-    desc = PL["module_desc"],
-    type = "group",
-    args = {
-      textfade = {
-        name = PL["textfade_name"],
-        desc = PL["textfade_desc"],
-        type = "multiselect",
-        values = Prat.HookedFrameList,
-        get = "GetSubValue",
-        set = "SetSubValue"
-      },
-      duration = {
-        name = PL["duration_name"],
-        desc = PL["duration_desc"],
-        type = "range",
-        order = 190,
-        min = 1,
-        max = 240,
-        step = 1,
-      },
-    }
-  })
-
-
-  --[[------------------------------------------------
-      Module Event Functions
-  ------------------------------------------------]] --
-
-  -- things to do when the module is enabled
-  function mod:OnModuleEnable()
-    self:OnValueChanged()
-    Prat.RegisterChatEvent(self, Prat.Events.FRAMES_UPDATED)
-  end
-
-  -- things to do when the module is disabled
-  function mod:OnModuleDisable()
-    for k, v in pairs(Prat.HookedFrames) do
-      self:Fade(v, true)
-    end
-  end
-
-
-  function mod:Prat_FramesUpdated(_, name, chatFrame)
-    self:Fade(chatFrame, self.db.profile.textfade[name])
-  end
-
-  function mod:OnValueChanged(...)
-    for k, v in pairs(Prat.HookedFrames) do
-      self:Fade(v, self.db.profile.textfade[k])
-    end
-  end
-
-  mod.OnSubValueChanged = mod.OnValueChanged
-
-
-  --[[------------------------------------------------
-      Core Functions
-  ------------------------------------------------]] --
-
-  -- enable/disable fading
-  function mod:Fade(cf, textfade)
-    if textfade then
-      cf:SetFading(true)
-      cf:SetTimeVisible(mod.db.profile.duration)
-    else
-      cf:SetFading(false)
-    end
-  end
-
-
-  return
 end) -- Prat:AddModuleToLoad
