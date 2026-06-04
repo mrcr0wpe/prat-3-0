@@ -1,197 +1,269 @@
-﻿---------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc., 
--- 51 Franklin Street, Fifth Floor, 
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      EventNames.lua
+    @Project:   Prat-3.0
 
+    BR: Exibição dos nomes técnicos dos eventos de chat.
+        - Adiciona o nome do evento ao final da mensagem
+        - Configuração por janela de chat
+        - Opção para forçar processamento completo de eventos
+        - Colorização baseada na cor original da mensagem
+        - Alteração temporária do filtro global de eventos do Prat
 
+    EN: Display of technical chat event names.
+        - Adds the event name at the end of the message
+        - Per-chat-window configuration
+        - Option to force full event processing
+        - Coloring based on the original message color
+        - Temporary override of Prat's global event processing filter
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
+	--[[------------------------------------------------
+		BR: Criação do módulo de exibição de nomes de eventos
+		EN: Creation of the event name display module
+	------------------------------------------------]]--
+	local module = Prat:NewModule("EventNames")
 
-  local PRAT_MODULE = Prat:RequestModuleName("EventNames")
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
 
-  if PRAT_MODULE == nil then
-    return
-  end
+	--[[------------------------------------------------
+		BR: Valores padrão do módulo
+		EN: Module default values
+	------------------------------------------------]]--
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = true,
+			show = {},
+			all_events = false,
+		}
+	})
 
-  local mod = Prat:NewModule(PRAT_MODULE)
+	--[[------------------------------------------------
+		BR: Migra chaves antigas de profile para snake_case
+		EN: Migrates old profile keys to snake_case
+	------------------------------------------------]]--
+	local function migrate_profile(profile)
+		if not profile then
+			return
+		end
 
-  local PL = mod.PL
+		if profile.allevents ~= nil and profile.all_events == nil then
+			profile.all_events = profile.allevents
+		end
+		profile.allevents = nil
 
+		profile.show = profile.show or {}
 
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["EventNames"] = true,
-    ["Chat window event name options."] = true,
-    ["Show"] = true,
-    ["Show events on chatframes"] = true,
-    ["show_name"] = "Show Event Names",
-    ["show_desc"] = "Toggle showing event names in each window.",
-    ["allevents_name"] = "Process all events",
-    ["allevents_desc"] = "Enable Prat processing for all chat events.",
-  })
-  --@end-debug@
+		if profile.all_events == nil then
+			profile.all_events = false
+		end
+	end
 
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-  --[===[@non-debug@
- do
-     local L
+	--[[------------------------------------------------
+		BR: Construção da interface de configuração do módulo
+		EN: Module configuration interface construction
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module.name, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		childGroups = "tab",
+		args = {
+			overview = {
+				type = "group",
+				name = PL["overview_tab_name"],
+				desc = PL["overview_tab_desc"],
+				order = 10,
+				args = {
+					full_description = {
+						type = "description",
+						name = PL["full_description"],
+						order = 10,
+						width = "full",
+					},
 
- 
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+					quick_guide_header = {
+						type = "header",
+						name = PL["quick_guide_header"],
+						order = 20,
+					},
 
-   PL:AddLocale(PRAT_MODULE, "enUS",L)
+					quick_guide = {
+						type = "description",
+						name = PL["quick_guide"],
+						order = 30,
+						width = "full",
+					},
+				},
+			},
 
+			windows = {
+				type = "group",
+				name = PL["windows_tab_name"],
+				desc = PL["windows_tab_desc"],
+				order = 100,
+				args = {
+					windows_help = {
+						type = "description",
+						name = PL["windows_help"],
+						order = 10,
+						width = "full",
+					},
 
- 
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+					show = {
+						name = PL["show_name"],
+						desc = PL["show_desc"],
+						type = "multiselect",
+						values = Prat.HookedFrameList,
+						order = 20,
+						width = "full",
+						get = "GetSubValue",
+						set = "SetSubValue",
+					},
+				},
+			},
 
-   PL:AddLocale(PRAT_MODULE, "frFR",L)
+			processing = {
+				type = "group",
+				name = PL["processing_tab_name"],
+				desc = PL["processing_tab_desc"],
+				order = 200,
+				args = {
+					processing_help = {
+						type = "description",
+						name = PL["processing_help"],
+						order = 10,
+						width = "full",
+					},
 
+					all_events = {
+						name = PL["all_events_name"],
+						desc = PL["all_events_desc"],
+						type = "toggle",
+						order = 20,
+						width = 1.60,
+					},
+				},
+			},
+		}
+	})
 
- 
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+	--[[------------------------------------------------
+		BR: Registra processamento antes da mensagem e aplica modo todos-eventos
+		EN: Registers pre-message processing and applies all-events mode
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		migrate_profile(self.db.profile)
 
-   PL:AddLocale(PRAT_MODULE, "deDE",L)
+		Prat.RegisterChatEvent(self, "Prat_PreAddMessage", "Prat_PreAddMessage")
+		self:set_all_events(self.db.profile.all_events)
+	end
 
+	--[[------------------------------------------------
+		BR: Restaura filtro global de eventos e remove eventos registrados
+		EN: Restores global event filter and removes registered events
+	------------------------------------------------]]--
+	function module:OnModuleDisable()
+		self:set_all_events(false)
+		Prat.UnregisterAllChatEvents(self)
+	end
 
- 
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+	--[[------------------------------------------------
+		BR: Retorna descrição localizada do módulo
+		EN: Returns localized module description
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
 
-   PL:AddLocale(PRAT_MODULE, "koKR",L)
+	--[[------------------------------------------------
+		BR: Reaplica processamento global quando opções mudam
+		EN: Reapplies global processing when options change
+	------------------------------------------------]]--
+	function module:OnValueChanged()
+		migrate_profile(self.db.profile)
+		self:set_all_events(self.db.profile.all_events)
+	end
 
+	--[[------------------------------------------------
+		BR: Callback que força o Prat a processar todos os eventos
+		EN: Callback that forces Prat to process all events
+	------------------------------------------------]]--
+	local function force_full_event_processing()
+		return Prat.EventProcessingType.Full
+	end
 
- 
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+	--[[------------------------------------------------
+		BR: Substitui/restaura temporariamente o filtro global de eventos
+		EN: Temporarily overrides/restores the global event filter
+	------------------------------------------------]]--
+	function module:set_all_events(all_events)
+		if not all_events then
+			Prat.EventIsProcessed = self.orig_event_is_processed or Prat.EventIsProcessed
+			self.orig_event_is_processed = nil
+			self.origEventIsProcessed = nil -- Legacy runtime compatibility.
+		elseif not self.orig_event_is_processed then
+			self.orig_event_is_processed = Prat.EventIsProcessed
+			self.origEventIsProcessed = self.orig_event_is_processed -- Legacy runtime compatibility.
+			Prat.EventIsProcessed = force_full_event_processing
+		end
+	end
 
-   PL:AddLocale(PRAT_MODULE, "esMX",L)
+	--[[------------------------------------------------
+		BR: Colorização e montagem do sufixo com o nome do evento
+		EN: Coloring and construction of the event-name suffix
+	------------------------------------------------]]--
+	do
+		local CLR = Prat.CLR
 
+		local function colorize_event_brackets(text)
+			return CLR:Colorize("ffffff", text)
+		end
 
- 
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+		local function colorize_event_name(text, color)
+			return CLR:Colorize(color, text)
+		end
 
-   PL:AddLocale(PRAT_MODULE, "ruRU",L)
+		local desaturated = 192 * 0.7 + 63
 
+		--[[------------------------------------------------
+			BR: Adiciona o nome do evento no pós-texto da mensagem
+			EN: Adds the event name to the message post-text
+		------------------------------------------------]]--
+		function module:Prat_PreAddMessage(_, message, frame, event, _, r, g, b)
+			if frame and self.db.profile.show[frame:GetName()] then
+				local color = ("%02x%02x%02x"):format(
+					(r or 1.0) * desaturated,
+					(g or 1.0) * desaturated,
+					(b or 1.0) * desaturated
+				)
 
- 
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
+				message.POST = "  "
+					.. colorize_event_brackets("(")
+					.. colorize_event_name(tostring(event), color)
+					.. colorize_event_brackets(")")
+			end
+		end
+	end
 
-   PL:AddLocale(PRAT_MODULE, "zhCN",L)
+	--[[------------------------------------------------
+		BR: Aliases legados para reduzir risco com chamadas antigas
+		EN: Legacy aliases to reduce risk from older calls
+	------------------------------------------------]]--
+	module.SetAllEvents = module.set_all_events
 
-
- 
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
-
-   PL:AddLocale(PRAT_MODULE, "esES",L)
-
-
- 
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="EventNames")@
-
-   PL:AddLocale(PRAT_MODULE, "zhTW",L)
-
-
- end
- --@end-non-debug@]===]
-
-
-  Prat:SetModuleDefaults(mod.name, {
-    profile = {
-      on = true,
-      show = {},
-      allevents = false,
-    }
-  })
-
-  Prat:SetModuleOptions(mod.name, {
-    name = PL["EventNames"],
-    desc = PL["Chat window event name options."],
-    type = "group",
-    args = {
-      show = {
-        name = PL["show_name"],
-        desc = PL["show_desc"],
-        type = "multiselect",
-        values = Prat.HookedFrameList,
-        get = "GetSubValue",
-        set = "SetSubValue"
-      },
-      allevents = {
-        name = function(info) return PL[info[#info] .. "_name"] end,
-        desc = function(info) return PL[info[#info] .. "_desc"] end,
-        type = "toggle"
-      }
-    }
-  })
-
-  function mod:OnModuleEnable()
-    Prat.RegisterChatEvent(self, "Prat_PreAddMessage", "Prat_PreAddMessage")
-    self:SetAllEvents(self.db.profile.allevents)
-  end
-
-  function mod:OnModuleDisable()
-    self:SetAllEvents(false)
-    Prat.UnregisterAllChatEvents(self)
-  end
-
-  function mod:GetDescription()
-    return PL["Chat window event name options."]
-  end
-
-  --[[------------------------------------------------
-    Core Functions
-  ------------------------------------------------]] --
-  function mod:OnValueChanged(...)
-    self:SetAllEvents(self.db.profile.allevents)
-  end
-
-  local function allEventsEnabled() return true end
-
-  function mod:SetAllEvents(allevents)
-    if not allevents then
-      Prat.EventIsProcessed = self.origEventIsProcessed or Prat.EventIsProcessed
-      self.origEventIsProcessed = nil
-    elseif not self.origEventIsProcessed and allevents then
-      self.origEventIsProcessed = Prat.EventIsProcessed
-      Prat.EventIsProcessed = allEventsEnabled
-    end
-  end
-
-  do
-    local CLR = Prat.CLR
-    local function EventBrackets(text) return CLR:Colorize("ffffff", text) end
-
-    local function EventName(text, c) return CLR:Colorize(c, text) end
-
-    local desat = 192 * 0.7 + 63
-    local c
-    function mod:Prat_PreAddMessage(arg, message, frame, event, t, r, g, b)
-      if self.db.profile.show[frame:GetName()] then
-        c = ("%02x%02x%02x"):format((r or 1.0) * desat, (g or 1.0) * desat, (b or 1.0) * desat)
-        message.POST = "  " .. EventBrackets("(") .. EventName(tostring(event), c) .. EventBrackets(")")
-      end
-    end
-  end
-
-  return
+	return
 end) -- Prat:AddModuleToLoad
