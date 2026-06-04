@@ -1,167 +1,188 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      Highlight.lua
+    @Project:   Prat-3.0
 
+    BR: Destaque visual para o próprio nome e possíveis nomes de guilda.
+        - Destaca o nome do jogador no chat
+        - Destaca textos entre < > como possíveis nomes de guilda
+        - Usa o sistema de patterns do Prat
+        - Mantém prioridades originais dos padrões
+
+    EN: Visual highlight for the player's name and possible guild names.
+        - Highlights the player's name in chat
+        - Highlights text between < > as possible guild names
+        - Uses Prat's pattern system
+        - Preserves original pattern priorities
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
-  local function dbg(...) end
+    --[[------------------------------------------------
+        BR: Criação do módulo de destaque visual
+        EN: Creation of the visual highlight module
+    ------------------------------------------------]]--
+    local module = Prat:NewModule("Highlight")
 
-  --@debug@
-  function dbg(...) Prat:PrintLiteral(...) end
+    --[[------------------------------------------------
+        BR: Referência local às strings centralizadas de localização
+        EN: Local reference to centralized localization strings
+    ------------------------------------------------]]--
+    local PL = module.PL
 
-  --@end-debug@
+    --[[------------------------------------------------
+        BR: Valores padrão do módulo
+        EN: Module default values
+    ------------------------------------------------]]--
+    Prat:SetModuleDefaults(module.name, {
+        profile = {
+            on = true,
+            player = true,
+            guild = true,
+        }
+    })
 
-  local PRAT_MODULE = Prat:RequestModuleName("Highlight")
+    --[[------------------------------------------------
+        BR: Interface de configuração do módulo
+        EN: Module configuration interface
+    ------------------------------------------------]]--
+    Prat:SetModuleOptions(module.name, {
+        name = PL["module_name"],
+        desc = PL["module_desc"],
+        type = "group",
+        childGroups = "tab",
+        args = {
+            overview = {
+                type = "group",
+                name = PL["overview_tab_name"],
+                desc = PL["overview_tab_desc"],
+                order = 10,
+                args = {
+                    full_description = {
+                        type = "description",
+                        name = PL["full_description"],
+                        order = 10,
+                        width = "full",
+                    },
 
-  if PRAT_MODULE == nil then
-    return
-  end
+                    quick_guide_header = {
+                        type = "header",
+                        name = PL["quick_guide_header"],
+                        order = 20,
+                    },
 
-  local module = Prat:NewModule(PRAT_MODULE)
+                    quick_guide = {
+                        type = "description",
+                        name = PL["quick_guide"],
+                        order = 30,
+                        width = "full",
+                    },
+                },
+            },
 
-  -- define localized strings
-  local PL = module.PL
+            highlights = {
+                type = "group",
+                name = PL["highlights_tab_name"],
+                desc = PL["highlights_tab_desc"],
+                order = 100,
+                args = {
+                    highlights_help = {
+                        type = "description",
+                        name = PL["highlights_help"],
+                        order = 10,
+                        width = "full",
+                    },
 
+                    player = {
+                        type = "toggle",
+                        name = PL["player_name"],
+                        desc = PL["player_desc"],
+                        order = 20,
+                        width = 1.30,
+                    },
 
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = true,
-      player = true,
-      guild = true
-    }
-  })
+                    highlight_spacer = {
+                        type = "description",
+                        name = " ",
+                        order = 25,
+                        width = 0.15,
+                    },
 
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["module_name"] = "Highlight",
-    ["module_desc"] = "Highlight your own name, and various other text",
-    ["player_name"] = "Highlight Self",
-    ["player_desc"] = "Highlight you own name in a special color",
-    ["guild_name"] = "Highlight Guilds",
-    ["guild_desc"] = "Highlight things which looks like guild names"
-  })
-  --@end-debug@
+                    guild = {
+                        type = "toggle",
+                        name = PL["guild_name"],
+                        desc = PL["guild_desc"],
+                        order = 30,
+                        width = 1.30,
+                    },
+                },
+            },
+        },
+    })
 
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-
-
-  --[===[@non-debug@
-do
-    local L
-
-
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "enUS", L)
-
-
-
---@localization(locale="itIT", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "itIT", L)
-
-
-
---@localization(locale="ptBR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "ptBR", L)
-
-
-
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "frFR", L)
-
-
-
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "deDE", L)
-
-
-
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "koKR",  L)
-
-
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "esMX",  L)
-
-
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "ruRU",  L)
-
-
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "zhCN",  L)
-
-
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "esES",  L)
-
-
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Highlight")@
-PL:AddLocale(PRAT_MODULE, "zhTW",  L)
-end
---@end-non-debug@]===]
-
-  local toggleOption = {
-    name = function(info) return PL[info[#info] .. "_name"] end,
-    desc = function(info) return PL[info[#info] .. "_desc"] end,
-    type = "toggle",
-  }
-
-  Prat:SetModuleOptions(module.name, {
-    name = PL.module_name,
-    desc = PL.module_desc,
-    type = "group",
-    args = {
-      player = toggleOption,
-      guild = toggleOption
-    }
-  })
-
-  local CLR = Prat.CLR
-  local function guildBracket(text)
-    return CLR:Colorize("ffffff", text)
-  end
-
-  local function guildText(text)
-    return CLR:Colorize("00ff00", text)
-  end
-
-
-  local function highlightPlayer(text)
-    if module.db.profile.player then
-      return Prat:RegisterMatch(CLR:Colorize("00ff00", text))
+    --[[------------------------------------------------
+        BR: Retorna descrição localizada do módulo
+        EN: Returns localized module description
+    ------------------------------------------------]]--
+    function module:GetDescription()
+        return PL["module_desc"]
     end
-  end
 
-  local function highlightGuild(text)
-    if module.db.profile.guild then
-      return Prat:RegisterMatch(guildBracket("<") .. guildText(text) .. guildBracket(">"))
+    --[[------------------------------------------------
+        BR: Utilitário de cores do Prat
+        EN: Prat color utility
+    ------------------------------------------------]]--
+    local CLR = Prat.CLR
+
+    --[[------------------------------------------------
+        BR: Coloriza os sinais < > usados no destaque de guilda
+        EN: Colorizes the < > brackets used in guild highlighting
+    ------------------------------------------------]]--
+    local function colorize_guild_bracket(text)
+        return CLR:Colorize("ffffff", text)
     end
-  end
 
-  Prat:SetModulePatterns(module, {
-    { pattern = Prat.GetNamePattern(UnitName("player")), matchfunc = highlightPlayer, priority = 47 },
-    { pattern = "<(..-)>", matchfunc = highlightGuild, priority = 49 },
-  })
+    --[[------------------------------------------------
+        BR: Coloriza o texto interno do possível nome de guilda
+        EN: Colorizes the inner text of the possible guild name
+    ------------------------------------------------]]--
+    local function colorize_guild_text(text)
+        return CLR:Colorize("00ff00", text)
+    end
+
+    --[[------------------------------------------------
+        BR: Destaca o nome do jogador quando a opção estiver ativa
+        EN: Highlights the player's name when the option is enabled
+    ------------------------------------------------]]--
+    local function highlight_player_name(text)
+        if module.db.profile.player then
+            return Prat:RegisterMatch(CLR:Colorize("00ff00", text))
+        end
+    end
+
+    --[[------------------------------------------------
+        BR: Destaca texto entre < > como possível nome de guilda
+        EN: Highlights text between < > as a possible guild name
+    ------------------------------------------------]]--
+    local function highlight_guild_name(text)
+        if module.db.profile.guild then
+            return Prat:RegisterMatch(colorize_guild_bracket("<") .. colorize_guild_text(text) .. colorize_guild_bracket(">"))
+        end
+    end
+
+    --[[------------------------------------------------
+        BR: Registra os padrões de destaque do nome do jogador e guilda
+        EN: Registers player name and guild highlight patterns
+    ------------------------------------------------]]--
+    Prat:SetModulePatterns(module, {
+        { pattern = Prat.GetNamePattern(UnitName("player")), matchfunc = highlight_player_name, priority = 47 },
+        { pattern = "<(..-)>", matchfunc = highlight_guild_name, priority = 49 },
+    })
 end)
