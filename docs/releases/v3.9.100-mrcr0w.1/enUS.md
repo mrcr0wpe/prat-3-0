@@ -3,13 +3,10 @@
 # <img src="https://flagcdn.com/28x21/us.png" width="28" height="21" alt="United States" /> Prat-3.0 3.9.100 — Release notes
 
 <p align="center">
-  <a href="./ptBR.md">
+  <strong>🌐 Also available in:</strong><br><br>
+  <a href="https://github.com/mrcr0wpe/prat-3-0/releases/tag/v3.9.100-mrcr0w.1">
     <img src="https://flagcdn.com/28x21/br.png" width="28" height="21" alt="Brazil" />
-    <strong>Leia em Português</strong>
-  </a>
-  &nbsp;&nbsp;|&nbsp;&nbsp;
-  <a href="../../../README.md">
-    <strong>Back to README</strong>
+    <strong>Português (Brasil)</strong>
   </a>
 </p>
 
@@ -19,9 +16,9 @@
 
 This is the first public and installable release of this **Prat-3.0** fork, prepared from the final package that was reviewed, synchronized and tested directly in World of Warcraft.
 
-The update establishes a centralized localization foundation, introduces `ptBR` as the first complete reviewed localization, keeps `enUS` as the base language and fallback, and brings together organization, interface and maintenance improvements made throughout the fork.
+The release establishes a centralized localization structure, introduces `ptBR` as the first complete reviewed localization, preserves `enUS` as the base language and fallback, and brings together the organization, interface and maintenance improvements made throughout the fork.
 
-The goal is not to rewrite Prat-3.0 from scratch or replace the original project. The purpose is to preserve what already works, organize the localization foundation, reduce user-facing text scattered throughout the code, improve interface clarity and prepare the project for progressive language expansion.
+The goal is not to rewrite Prat-3.0 from scratch or replace the original project. The purpose is to preserve what already works, organize the localization foundation, reduce user-facing text scattered directly throughout the code, improve interface clarity and prepare the project for progressive language expansion.
 
 ---
 
@@ -61,7 +58,7 @@ The goal is not to rewrite Prat-3.0 from scratch or replace the original project
 
 ## 🧪 Validation
 
-The package attached to this release was:
+The package for this release was:
 
 - generated from the `master` branch;
 - installed from a clean ZIP package;
@@ -74,24 +71,27 @@ Primary testing was performed on **World of Warcraft: The War Within**.
 
 ---
 
-## 📦 Installation
+## 📦 Download and installation
 
-1. Download the ZIP file attached to the release.
-2. Extract the `Prat-3.0` folder into:
+Download the installable package:
+
+[**Prat-3.0-v3.9.100-mrcr0w.1.zip**](https://github.com/mrcr0wpe/prat-3-0/releases/download/v3.9.100-mrcr0w.1/Prat-3.0-v3.9.100-mrcr0w.1.zip)
+
+Extract the `Prat-3.0` folder into:
 
 ```text
 World of Warcraft\_retail_\Interface\AddOns
 ```
 
-3. Confirm that the final path looks like this:
+Confirm that the final path contains:
 
 ```text
 Interface\AddOns\Prat-3.0\Prat-3.0.toc
 ```
 
-4. Enable **Prat 3.0** on the AddOns screen.
+Then enable **Prat 3.0** on the AddOns screen.
 
-> For addon installation, use the ZIP file manually attached to the release. The automatic **Source code** files contain the complete repository rather than the prepared and tested runtime package.
+> Use the ZIP file manually attached to this release. The automatic **Source code** archives contain the complete repository rather than the prepared and tested runtime package.
 
 ---
 
@@ -130,5 +130,5 @@ This project is a fork of **Prat-3.0**, originally developed by **Sylvanaar** an
 The original project’s technical foundation, license and credits remain preserved.
 
 <p align="right">
-  <a href="#top">⬆️ <strong>Back to the beginning of this page</strong></a>
+  <a href="#top">⬆️ <strong>Back to the beginning</strong></a>
 </p>
