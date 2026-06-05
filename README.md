@@ -45,6 +45,84 @@ O foco deste fork está em:
 
 Em resumo: este é um fork de **localização, organização, manutenção e polimento de interface**, com modificações pontuais em módulos específicos.
 
+### 🖼️ Galeria visual
+
+As imagens abaixo demonstram a interface localizada, a reorganização das opções e alguns dos recursos visuais funcionando diretamente no jogo.
+
+#### Personalização do chat, fontes e marcas de tempo
+
+<p align="center">
+  <img src="docs/screenshots/ptBR/chat-customization.png"
+       alt="Personalização do chat, fonte, barra de digitação e marcas de tempo em ptBR"
+       width="100%">
+</p>
+
+#### Interface localizada
+
+<table>
+<tr>
+<td width="50%" align="center">
+
+<strong>Alertas e nomes monitorados</strong>
+
+<img src="docs/screenshots/ptBR/alerts.png"
+  alt="Configuração de alertas e nomes monitorados em ptBR"
+  width="100%">
+
+</td>
+<td width="50%" align="center">
+
+<strong>Barra de digitação</strong>
+
+<img src="docs/screenshots/ptBR/editbox.png"
+  alt="Configuração da barra de digitação em ptBR"
+  width="100%">
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><strong>📷 Clique para abrir a galeria adicional em ptBR</strong></summary>
+
+<br>
+
+#### Controle de módulos
+
+<p align="center">
+  <img src="docs/screenshots/ptBR/module-control.png"
+       alt="Controle de módulos do Prat em ptBR"
+       width="90%">
+</p>
+
+#### Atalhos do teclado
+
+<p align="center">
+  <img src="docs/screenshots/ptBR/keybindings.png"
+       alt="Atalhos do teclado do Prat em ptBR"
+       width="90%">
+</p>
+
+#### Lista de AddOns e versão instalada
+
+<p align="center">
+  <img src="docs/screenshots/ptBR/addon-list.png"
+       alt="Prat 3.0 versão 3.9.100 ativo na lista de AddOns"
+       width="75%">
+</p>
+
+#### Variação de fonte e marcas de tempo
+
+<p align="center">
+  <img src="docs/screenshots/ptBR/font-timestamp-variant.png"
+       alt="Variação visual de fonte e marcas de tempo em ptBR"
+       width="100%">
+</p>
+
+</details>
+
+---
+
 ---
 
 ### 🎯 Escopo das modificações
@@ -226,6 +304,84 @@ This fork focuses on:
 - preserving the original behavior whenever possible.
 
 In short: this is a **localization, organization, maintenance, and UI polish fork**, with selected module-level changes.
+
+### 🖼️ Visual gallery
+
+The screenshots below demonstrate the localized interface, reorganized options and selected visual features working directly in-game.
+
+#### Chat customization, fonts and timestamps
+
+<p align="center">
+  <img src="docs/screenshots/enUS/chat-customization.png"
+       alt="Chat customization, font, edit box and timestamps in enUS"
+       width="100%">
+</p>
+
+#### Localized interface
+
+<table>
+<tr>
+<td width="50%" align="center">
+
+<strong>Alerts and monitored names</strong>
+
+<img src="docs/screenshots/enUS/alerts.png"
+  alt="Alert and monitored name settings in enUS"
+  width="100%">
+
+</td>
+<td width="50%" align="center">
+
+<strong>Edit box</strong>
+
+<img src="docs/screenshots/enUS/editbox.png"
+  alt="Edit box settings in enUS"
+  width="100%">
+
+</td>
+</tr>
+</table>
+
+<details>
+<summary><strong>📷 Click to open the additional enUS gallery</strong></summary>
+
+<br>
+
+#### Module control
+
+<p align="center">
+  <img src="docs/screenshots/enUS/module-control.png"
+       alt="Prat module control interface in enUS"
+       width="90%">
+</p>
+
+#### Keybindings
+
+<p align="center">
+  <img src="docs/screenshots/enUS/keybindings.png"
+       alt="Prat keybindings in enUS"
+       width="90%">
+</p>
+
+#### AddOn list and installed version
+
+<p align="center">
+  <img src="docs/screenshots/enUS/addon-list.png"
+       alt="Prat 3.0 version 3.9.100 enabled in the AddOn list"
+       width="75%">
+</p>
+
+#### Font and timestamp variation
+
+<p align="center">
+  <img src="docs/screenshots/enUS/font-timestamp-variant.png"
+       alt="Visual font and timestamp variation in enUS"
+       width="100%">
+</p>
+
+</details>
+
+---
 
 ---
 
