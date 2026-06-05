@@ -1,118 +1,123 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      links.lua
+    @Project:   Prat-3.0
 
+    BR: Serviço de infraestrutura e gerenciamento de hyperlinks.
+        - Construção e formatação de links
+        - Registro dinâmico de tipos de hyperlink
+        - Hooks de tooltip e hyperlinks
+        - Integração com frames do chat
 
+    EN: Hyperlink infrastructure and management service.
+        - Link building and formatting
+        - Dynamic hyperlink type registration
+        - Tooltip and hyperlink hooks
+        - Chat frame integration
 
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
 
-
---[[ BEGIN STANDARD HEADER ]] --
-
--- Imports
-local _G = _G
-local LibStub = LibStub
+local _, private = ...
 
 local pairs, ipairs = pairs, ipairs
 local tinsert, tremove, tconcat = table.insert, table.remove, table.concat
 
--- Isolate the environment
-setfenv(1, select(2, ...))
-
---[[ END STANDARD HEADER ]] --
-
-
-local function debug(...)
-  --  _G.ChatFrame1:print(...)
+--[[------------------------------------------------
+    BR: Constrói hyperlinks coloridos completos.
+    EN: Builds complete colored hyperlinks.
+------------------------------------------------]]--
+function private.BuildLink(linktype, data, text, color, link_start, link_end)
+	return "|cff" .. (color or "ffffff") .. "|H" .. linktype .. ":" .. data .. "|h" .. (link_start or "[") .. text .. (link_end or "]") .. "|h|r"
 end
 
-function BuildLink(linktype, data, text, color, link_start, link_end)
-  return "|cff" .. (color or "ffffff") .. "|H" .. linktype .. ":" .. data .. "|h" .. (link_start or "[") .. text .. (link_end or "]") .. "|h|r"
-end
+--[[------------------------------------------------
+    BR: Formata hyperlinks utilizando parâmetros variáveis.
+    EN: Formats hyperlinks using variable parameters.
+------------------------------------------------]]--
+function private.FormatLink(linkType, linkDisplayText, ...)
+	local linkFormatTable = { ("|H%s"):format(linkType), ... }
+	local returnLink = tconcat(linkFormatTable, ":")
 
+	if linkDisplayText then
+		return returnLink .. ("|h%s|h"):format(linkDisplayText)
+	end
 
-function FormatLink(linkType, linkDisplayText, ...)
-  local linkFormatTable = { ("|H%s"):format(linkType), ... };
-  local returnLink = tconcat(linkFormatTable, ":");
-  if linkDisplayText then
-    return returnLink .. ("|h%s|h"):format(linkDisplayText);
-  else
-    return returnLink .. "|h";
-  end
+	return returnLink .. "|h"
 end
 
 do
-  local LinkRegistry = {}
+	local LinkRegistry = {}
 
-  -- linktype = { linkid, linkfunc, handler }
-  function RegisterLinkType(linktype, who)
-    if linktype and linktype.linkid and linktype.linkfunc then
-      linktype.owner = who
+	--[[--------------------------------------------
+	    BR: Registro interno de tipos de hyperlink.
+	    EN: Internal hyperlink type registry.
+	--------------------------------------------]]--
 
-      tinsert(LinkRegistry, linktype)
+	-- linktype = { linkid, linkfunc, handler }
 
-      local idx = #LinkRegistry
+	--[[--------------------------------------------
+	    BR: Registra um novo tipo de hyperlink.
+	    EN: Registers a new hyperlink type.
+	--------------------------------------------]]--
+	function private.RegisterLinkType(linktype, who)
+		if linktype and linktype.linkid and linktype.linkfunc then
+			linktype.owner = who
 
-      debug([[DBG_LINK("RegisterLinkType", who, linktype.linkid, idx)]])
+			tinsert(LinkRegistry, linktype)
 
-      return idx
-    end
-  end
+			return #LinkRegistry
+		end
+	end
 
-  function UnregisterAllLinkTypes(who)
-    debug([[DBG_LINK("UnregisterAllLinkTypes", who)]])
+	--[[--------------------------------------------
+	    BR: Remove todos os tipos registrados por um owner.
+	    EN: Removes all link types registered by an owner.
+	--------------------------------------------]]--
+	function private.UnregisterAllLinkTypes(who)
+		for i, linktype in ipairs(LinkRegistry) do
+			if linktype.owner == who then
+				private.UnregisterLinkType(i)
+			end
+		end
+	end
 
-    for i, linktype in ipairs(LinkRegistry) do
-      if linktype.owner == who then
-        UnregisterLinkType(i)
-      end
-    end
-  end
+	--[[--------------------------------------------
+	    BR: Remove um tipo de hyperlink registrado.
+	    EN: Removes a registered hyperlink type.
+	--------------------------------------------]]--
+	function private.UnregisterLinkType(idx)
+		tremove(LinkRegistry, idx)
+	end
 
-  function UnregisterLinkType(idx)
-    tremove(LinkRegistry, idx)
-  end
+	--[[--------------------------------------------
+	    BR: Hook principal de hyperlinks/tooltips.
+	    EN: Main hyperlink/tooltip hook.
+	--------------------------------------------]]--
+	function private.SetHyperlinkHook(hooks, tooltip, link, ...)
+		for _, reg_link in ipairs(LinkRegistry) do
+			if reg_link.linkid == link:sub(1, (reg_link.linkid):len()) then
+				local frame
 
-  function SetHyperlinkHook(hooks, tooltip, link, ...)
-    debug("SetItemRef ", link, ...)
-    for i, reg_link in ipairs(LinkRegistry) do
-      if reg_link.linkid == link:sub(1, (reg_link.linkid):len()) then
-        local frame
-        for _,v in pairs(HookedFrames) do
-          if v:IsMouseOver() and ((v.isDocked and v:IsShown()) or not v.isDocked) then
-            frame = v
-            break
-          end
-        end
-        if (reg_link.linkfunc(reg_link.handler, link, frame, ...) == false) then
-          debug([[DUMP_LINK("SetHyperlink ", "Link Handled Internally")]])
-          return false
-        end
-      end
-    end
-    hooks.SetHyperlink(tooltip, link, ...)
-  end
+				--[[--------------------------------
+				    BR: Detecta frame atualmente ativo.
+				    EN: Detects currently active frame.
+				--------------------------------]]--
+				for _, v in pairs(private.HookedFrames) do
+					if v:IsMouseOver() and v:IsVisible() then
+						frame = v
+						break
+					end
+				end
+
+				if reg_link.linkfunc(reg_link.handler, link, frame, ...) == false then
+					return false
+				end
+			end
+		end
+
+		hooks.SetHyperlink(tooltip, link, ...)
+	end
 end
-
-

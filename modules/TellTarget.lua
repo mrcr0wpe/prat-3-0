@@ -1,197 +1,214 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc., 
--- 51 Franklin Street, Fifth Floor, 
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      TellTarget.lua
+    @Project:   Prat-3.0
 
+    BR: Comando /tt para enviar sussurro ao alvo atual.
+        - Detecta /tt na barra de digitação do chat
+        - Usa o jogador selecionado como destinatário
+        - Suporta nome com reino quando necessário
+        - Atualiza a editbox para WHISPER
+        - Mantém compatibilidade com Bindings.xml
 
+    EN: /tt command to whisper the current target.
+        - Detects /tt in the chat edit box
+        - Uses the selected player as the recipient
+        - Supports realm-qualified names when needed
+        - Updates the edit box to WHISPER
+        - Keeps compatibility with Bindings.xml
 
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
 
+--[[------------------------------------------------
+    BR: Compatibilidade com APIs antigas e modernas para iniciar whisper
+    EN: Compatibility with old and modern APIs for starting whispers
+------------------------------------------------]]--
+local chat_frame_send_tell = _G.ChatFrame_SendTell or _G.ChatFrameUtil.SendTell
 
+--[[------------------------------------------------
+    BR: Compatibilidade com atualização do cabeçalho da editbox
+    EN: Compatibility with edit box header update
+------------------------------------------------]]--
+local chat_edit_update_header = _G.ChatEdit_UpdateHeader or _G.ChatFrameEditBoxMixin.UpdateHeader
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
+	--[[------------------------------------------------
+		BR: Criação do módulo TellTarget com suporte a hooks
+		EN: Creation of the TellTarget module with hook support
+	------------------------------------------------]]--
+	local module = Prat:NewModule("TellTarget", "AceHook-3.0")
 
-  local PRAT_MODULE = Prat:RequestModuleName("TellTarget")
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
 
-  if PRAT_MODULE == nil then
-    return
-  end
+	--[[------------------------------------------------
+		BR: Valores padrão do módulo
+		EN: Module default values
+	------------------------------------------------]]--
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = true,
+		}
+	})
 
-  local module = Prat:NewModule(PRAT_MODULE, "AceHook-3.0")
+	--[[------------------------------------------------
+		BR: Interface de configuração do módulo
+		EN: Module configuration interface
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module.name, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		childGroups = "tab",
+		args = {
+			overview = {
+				type = "group",
+				name = PL["overview_tab_name"],
+				desc = PL["overview_tab_desc"],
+				order = 10,
+				args = {
+					full_description = {
+						type = "description",
+						name = PL["full_description"],
+						order = 10,
+						width = "full",
+					},
 
-  local PL = module.PL
+					quick_guide_header = {
+						type = "header",
+						name = PL["quick_guide_header"],
+						order = 20,
+					},
 
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["TellTarget"] = true,
-    ["Adds telltarget slash command (/tt)."] = true,
-    ["Target does not exist."] = true,
-    ["Target is not a player."] = true,
-    ["No target selected."] = true,
-    ["NoTarget"] = true,
-    ["/tt"] = true,
-  })
-  --@end-debug@
+					quick_guide = {
+						type = "description",
+						name = PL["quick_guide"],
+						order = 30,
+						width = "full",
+					},
+				},
+			},
 
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-  --[===[@non-debug@
- do
-     local L
+			commands = {
+				type = "group",
+				name = PL["commands_tab_name"],
+				desc = PL["commands_tab_desc"],
+				order = 100,
+				args = {
+					commands_help = {
+						type = "description",
+						name = PL["commands_help"],
+						order = 10,
+						width = "full",
+					},
 
- 
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
+					examples_header = {
+						type = "header",
+						name = PL["examples_header"],
+						order = 20,
+					},
 
-   PL:AddLocale(PRAT_MODULE, "enUS",L)
+					example_text = {
+						type = "description",
+						name = PL["example_text"],
+						order = 30,
+						width = "full",
+					},
+				},
+			},
+		}
+	})
 
+	--[[------------------------------------------------
+		BR: Instala hook seguro na editbox principal do chat
+		EN: Installs secure hook on the main chat edit box
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		self:SecureHookScript(_G.ChatFrame1EditBox, "OnTextChanged", "on_text_changed")
+	end
 
- 
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
+	--[[------------------------------------------------
+		BR: Remove hooks instalados pelo módulo
+		EN: Removes hooks installed by the module
+	------------------------------------------------]]--
+	function module:OnModuleDisable()
+		self:UnhookAll()
+	end
 
-   PL:AddLocale(PRAT_MODULE, "frFR",L)
+	--[[------------------------------------------------
+		BR: Retorna descrição localizada do módulo
+		EN: Returns localized module description
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
 
+	--[[------------------------------------------------
+		BR: Detecta o comando /tt digitado na editbox
+		EN: Detects the /tt command typed in the edit box
+	------------------------------------------------]]--
+	function module:on_text_changed(edit_box)
+		local command, msg = edit_box:GetText():match("^(/%S+)%s(.*)$")
+		if command == "/tt" or command == PL["/tt"] then
+			self:send_tell_to_target(edit_box.chatFrame, msg, edit_box)
+		end
+	end
 
- 
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
+	--[[------------------------------------------------
+		BR: Define o alvo atual como destinatário do whisper
+		EN: Sets the current target as the whisper recipient
+	------------------------------------------------]]--
+	function module:send_tell_to_target(frame, text, edit_box)
+		if frame == nil then
+			frame = DEFAULT_CHAT_FRAME
+		end
 
-   PL:AddLocale(PRAT_MODULE, "deDE",L)
+		local unit_name, realm, full_name
 
+		if UnitIsPlayer("target") then
+			unit_name, realm = UnitName("target")
+			if unit_name then
+				if realm and UnitRealmRelationship("target") ~= LE_REALM_RELATION_SAME then
+					full_name = unit_name .. "-" .. realm
+				else
+					full_name = unit_name
+				end
+			end
+		end
 
- 
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
+		local target = full_name and full_name:gsub(" ", "")
 
-   PL:AddLocale(PRAT_MODULE, "koKR",L)
+		if not target or target == "" then
+			Prat:Print(PL["no_target_message"])
+			return
+		end
 
+		if edit_box then
+			edit_box:SetAttribute("chatType", "WHISPER")
+			edit_box:SetAttribute("tellTarget", target)
+			edit_box:SetText(text or "")
+			chat_edit_update_header(edit_box)
+		else
+			chat_frame_send_tell(target, frame)
+		end
+	end
 
- 
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
+	--[[------------------------------------------------
+		BR: Aliases legados/externos para Bindings.xml e convenções antigas
+		EN: Legacy/external aliases for Bindings.xml and older conventions
+	------------------------------------------------]]--
+	module.OnTextChanged = module.on_text_changed
+	module.SendTellToTarget = module.send_tell_to_target
 
-   PL:AddLocale(PRAT_MODULE, "esMX",L)
-
-
- 
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
-
-   PL:AddLocale(PRAT_MODULE, "ruRU",L)
-
-
- 
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
-
-   PL:AddLocale(PRAT_MODULE, "zhCN",L)
-
-
- 
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
-
-   PL:AddLocale(PRAT_MODULE, "esES",L)
-
-
- 
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="TellTarget")@
-
-   PL:AddLocale(PRAT_MODULE, "zhTW",L)
-
-
- end
- --@end-non-debug@]===]
-
-  -- create prat module
-
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = true,
-    }
-  })
-
-  Prat:SetModuleOptions(module.name, {
-    name = PL["TellTarget"],
-    desc = PL["Adds telltarget slash command (/tt)."],
-    type = "group",
-    args = {
-      info = {
-        name = PL["Adds telltarget slash command (/tt)."],
-        type = "description",
-      }
-    }
-  })
-
-  --[[------------------------------------------------
-      Module Event Functions
-  ------------------------------------------------]] --
-  function module:OnModuleEnable()
-    self:HookScript(ChatFrame1EditBox, "OnTextChanged")
-  end
-
-  function module:OnModuleDisable()
-    self:UnhookAll()
-  end
-
-  --[[------------------------------------------------
-      Core Functions
-  ------------------------------------------------]] --
-
-  function module:GetDescription()
-    return PL["Adds telltarget slash command (/tt)."]
-  end
-
-  function module:OnTextChanged(editBox, ...)
-    local command, msg = editBox:GetText():match("^(/%S+)%s(.*)$")
-    if command == "/tt" or command == PL["/tt"] then
-      self:SendTellToTarget(editBox.chatFrame, msg, editBox)
-    end
-    self.hooks[editBox].OnTextChanged(editBox, ...)
-  end
-
-  function module:SendTellToTarget(frame, text, editBox)
-    if frame == nil then frame = DEFAULT_CHAT_FRAME end
-
-    local unitname, realm, fullname
-    if UnitIsPlayer("target") then
-      unitname, realm = UnitName("target")
-      if unitname then
-        if realm and UnitRealmRelationship("target") ~= LE_REALM_RELATION_SAME then
-          fullname = unitname .. "-" .. realm
-        else
-          fullname = unitname
-        end
-      end
-    end
-
-    local target = fullname and fullname:gsub(" ", "") or PL["NoTarget"]
-
-    if editBox then
-      editBox:SetAttribute("chatType", "WHISPER");
-      editBox:SetAttribute("tellTarget", target);
-      editBox:SetText(text)
-      ChatEdit_UpdateHeader(editBox);
-    else
-      ChatFrame_SendTell(target, frame)
-    end
-  end
-
-  local function TellTarget(msg)
-    module:SendTellToTarget(SELECTED_CHAT_FRAME, msg)
-  end
-
-  return
-end) -- Prat:AddModuleToLoad
+	return
+end)

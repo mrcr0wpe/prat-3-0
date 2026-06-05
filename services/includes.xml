@@ -1,16 +1,44 @@
 <Ui xmlns="http://www.blizzard.com/wow/ui/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.blizzard.com/wow/ui/
-..\FrameXML\UI.xsd">
+..\..\FrameXML\UI.xsd">
 
-<Script file="events.lua"/>
-<Script file="links.lua"/>
-<Script file="patterns.lua"/>
-<Script file="chatsections.lua"/>
-<Script file="print.lua"/>
-<Script file="classcolor.lua"/>
-<Script file="textcolor.lua"/>
-<Script file="classgenderfix.lua"/>
-<Script file="folderlocation.lua"/>
-<Script file="channelapi.lua"/>
-<Script file="unitpopupmenus.lua"/>
-<Script file="bayesclassifier.lua" />
+	<!-- ==================================================
+	     BR: Serviços utilitários centrais
+	     EN: Core utility services
+	     ================================================== -->
+
+	<Script file="helpers.lua"/>
+	<Script file="events.lua"/>
+
+	<!-- ==================================================
+	     BR: Pipeline de links e patterns
+	     EN: Link and pattern processing pipeline
+	     ================================================== -->
+
+	<Script file="links.lua"/>
+	<Script file="patterns.lua"/>
+	<Script file="chatsections.lua"/>
+
+	<!-- ==================================================
+	     BR: Serviços de saída e formatação visual
+	     EN: Output and visual formatting services
+	     ================================================== -->
+
+	<Script file="print.lua"/>
+	<Script file="classcolor.lua"/>
+	<Script file="textcolor.lua"/>
+
+	<!-- ==================================================
+	     BR: Serviços de gerenciamento de canais
+	     EN: Channel management services
+	     ================================================== -->
+
+	<Script file="channelapi.lua"/>
+
+	<!-- ==================================================
+	     BR: Engine estatística e bayesiana
+	     EN: Statistical and Bayesian engine
+	     ================================================== -->
+
+	<Script file="bayesclassifier.lua"/>
+
 </Ui>

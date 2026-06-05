@@ -1,422 +1,504 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      History.lua
+    @Project:   Prat-3.0
 
+    BR: Controle do histórico de chat e comandos.
+        - Histórico persistente do editbox
+        - Quantidade máxima de linhas por janela
+        - Histórico de comandos entre sessões
+        - Integração com Scrollback
+        - Configuração independente por frame
+        - Gerenciamento de histórico seguro via hooks
 
+    EN: Chat and command history control.
+        - Persistent editbox history
+        - Maximum line count per frame
+        - Command history between sessions
+        - Scrollback integration
+        - Per-frame independent configuration
+        - Safe history management through hooks
 
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
 
+--[[------------------------------------------------
+    BR: Compatibilidade com constantes antigas e modernas de janelas de chat
+    EN: Compatibility with old and modern chat window constants
+------------------------------------------------]]--
+local NUM_CHAT_WINDOWS = NUM_CHAT_WINDOWS or Constants.ChatFrameConstants.MaxChatWindows
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
-
-  local PRAT_MODULE = Prat:RequestModuleName("History")
-
-  if PRAT_MODULE == nil then
-    return
-  end
-
-  local module = Prat:NewModule(PRAT_MODULE, "AceHook-3.0")
-
-  local PL = module.PL
-
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["History"] = true,
-    ["Chat history options."] = true,
-    ["Set Chat Lines"] = true,
-    ["Set the number of lines of chat history for each window."] = true,
-    ["Set Command History"] = true,
-    ["Maximum number of lines of command history to save."] = true,
-    ["Save Command History"] = true,
-    ["Saves command history between sessions (for use with alt+up arrow or just the up arrow)"] = true,
-    ["Scrollback"] = true,
-    ["Store the chat lines between sessions"] = true,
-    ["Scrollback Options"] = true,
-    ["Command History Options"] = true,
-    divider = "========== End of Scrollback ==========",
-    scrollbackduration_name = "Scrollback Duration",
-    scrollbackduration_desc = "How many hours to keep the saved messages.",
-    ["Colors the GMOTD label"] = true,
-    ["Color GMOTD"] = true,
-    delaygmotd_name = "Delay GMOTD",
-    delaygmotd_desc = "Delay GMOTD until after all the startup spam",
-    bnet_removed = "<BNET REMOVED>",
-    removespam_name = "Remove Spam",
-    removespam_desc = "Remove addon spam messages when restoring the chat history"
-  })
-  --@end-debug@
-
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-  --[===[@non-debug@
- do
-     local L
-
-
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "enUS",L)
-
-
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "frFR",L)
-
-
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "deDE",L)
-
-
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "koKR",L)
-
-
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "esMX",L)
-
-
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "ruRU",L)
-
-
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "zhCN",L)
-
-
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "esES",L)
-
-
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="History")@
-
-   PL:AddLocale(PRAT_MODULE, "zhTW",L)
- end
- --@end-non-debug@]===]
-
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = true,
-      chatlinesframes = {},
-      chatlines = 384,
-      maxlines = 50,
-      scrollbackduration = 24,
-      savehistory = false,
-      scrollback = true,
-      removespam = true,
-      colorgmotd = true,
-      delaygmotd = true,
-    }
-  })
-
-  module.pluginopts = {}
-
-  Prat:SetModuleOptions(module.name, {
-    name = PL["History"],
-    desc = PL["Chat history options."],
-    type = "group",
-    plugins = module.pluginopts,
-    args = {
-      chatlinesframes = {
-        name = PL["Set Chat Lines"],
-        desc = PL["Set the number of lines of chat history for each window."],
-        type = "multiselect",
-        values = Prat.HookedFrameList,
-        get = "GetSubValue",
-        set = "SetSubValue"
-      },
-      chatlines = {
-        name = PL["Set Chat Lines"],
-        desc = PL["Set the number of lines of chat history for each window."],
-        type = "range",
-        order = 120,
-        min = 300,
-        max = 5000,
-        step = 10,
-        bigStep = 50,
-      },
-      cmdhistheader = {
-        name = PL["Command History Options"],
-        type = "header",
-        order = 130,
-      },
-      maxlines = {
-        name = PL["Set Command History"],
-        desc = PL["Maximum number of lines of command history to save."],
-        type = "range",
-        order = 132,
-        min = 0,
-        max = 500,
-        step = 10,
-        bigStep = 50,
-        disabled = function() return not module.db.profile.savehistory end
-      },
-      savehistory = {
-        name = PL["Save Command History"],
-        desc = PL["Saves command history between sessions (for use with alt+up arrow or just the up arrow)"],
-        type = "toggle",
-        order = 131,
-      },
---      colorgmotd = {
---        name = PL["Color GMOTD"],
---        desc = PL["Colors the GMOTD label"],
---        type = "toggle",
---        order = 150,
---      },
---      delaygmotd = {
---        name = PL.delaygmotd_name,
---        desc = PL.delaygmotd_desc,
---        type = "toggle",
---        order = 151
---      }
-    }
-  })
-
-
-  local function applyEditBox(func)
-    for i = 1, NUM_CHAT_WINDOWS do
-      local f = _G["ChatFrame" .. i .. "EditBox"]
-      func(f)
-    end
-  end
-
-  --[[------------------------------------------------
-      Module Event Functions
-  ------------------------------------------------]] --
-
-  -- things to do when the module is enabled
-  function module:OnModuleEnable()
-
-
-    Prat3CharDB = Prat3CharDB or {}
-    Prat3CharDB.history = Prat3CharDB.history or {}
-    Prat3CharDB.history.cmdhistory = Prat3CharDB.history.cmdhistory or {}
-
-
-    --                if self.db.profile.cmdhistory then
-    --                    Prat3CharDB.history.cmdhistory = self.db.profile.cmdhistory
-    --                    self.db.profile.cmdhistory = nil
-    --                end
-
-
-
-    for i, v in ipairs(Prat3CharDB.history.cmdhistory) do
-      if (type(v) == "string" and v:sub(1, 9) ~= "ChatFrame") then
-        Prat3CharDB.history.cmdhistory[i] = nil
-      end
-    end
-
-    applyEditBox(function(edit)
-      local name = edit:GetName()
-      Prat3CharDB.history.cmdhistory[name] = Prat3CharDB.history.cmdhistory[name] or {}
-    end)
-
-
-    self:ConfigureAllChatFrames()
-
-
-    for k in pairs(Prat3CharDB.history.cmdhistory) do
-      local edit = _G[k]
-      if (edit) then
-        self:SecureHook(edit, "AddHistoryLine")
-        if self.db.profile.savehistory then
-          self:addSavedHistory(edit)
-        end
-        self:SecureHook(edit, "ClearHistory")
-      end
-    end
-
-
-    -- Clean out any old data
-    if self.db.profile.cmdhistory then
-      self.db.profile.cmdhistory = nil
-    end
-
-
-
---    if IsInGuild() then
---      self.frame = self.frame or CreateFrame("Frame")
---
---      if self.db.profile.delaygmotd then
---        self:DelayGMOTD(self.frame)
---      end
---
---      if self.db.profile.colorgmotd then
---        local a, b = strsplit(":", GUILD_MOTD_TEMPLATE)
---        if a and b then
---          GUILD_MOTD_TEMPLATE = "|cffffffff" .. a .. "|r:" .. b
---        end
---      end
---    end
-  end
-
-
-  function module:GetDescription()
-    return PL["Chat history options."]
-  end
-
-  -- things to do when the module is enabled
-  function module:OnModuleDisable()
-    self:ConfigureAllChatFrames(384)
-  end
-
-  function module:ConfigureAllChatFrames(lines)
-    local lines = lines or self.db.profile.chatlines
-
-    for k, v in pairs(self.db.profile.chatlinesframes) do
-      self:SetHistory(_G[k], lines)
-    end
-
-    for k in pairs(Prat3CharDB.history.cmdhistory) do
-      local edit = _G[k]
-      if (edit) then
-        if self.db.profile.savehistory then
-          edit.history_lines = Prat3CharDB.history.cmdhistory[k]
-        else
-          edit.history_lines = {}
-        end
-        edit.history_index = 0
-      end
-    end
-  end
-
-  function module:OnSubvalueChanged()
-    self:ConfigureAllChatFrames()
-  end
-
-  function module:OnValueChanged()
-    self:ConfigureAllChatFrames()
-  end
-
-
---  function module:DelayGMOTD(frame)
---    local delay = 2.5
---    local maxtime = 60
---    ChatFrame1:UnregisterEvent("GUILD_MOTD")
---    frame:SetScript("OnUpdate", function(this, expired)
---      delay = delay - expired
---      if delay < 0 then
---        local msg = GetGuildRosterMOTD()
---        if maxtime < 0 or (msg and msg:len() > 0) then
---          ChatFrame1:RegisterEvent("GUILD_MOTD")
---
---          for _, f in pairs(Prat.Frames) do
---            if f:IsEventRegistered("GUILD_MOTD") then
---              ChatFrame_SystemEventHandler(f, "GUILD_MOTD", msg)
---            end
---          end
---          this:Hide()
---        else
---          delay = 2.5
---          maxtime = maxtime - 2.5
---        end
---      end
---    end)
---  end
-
-
-  --[[------------------------------------------------
-      Core Functions
-  ------------------------------------------------]] --
-  function module:SetHistory(f, lines)
-    if f == nil then return end
-
-    f:SetMaxLines(lines)
-  end
-
-  function module:addSavedHistory(editBox)
-    local editBox = editBox or ChatFrame1EditBox
-    local cmdhistory = Prat3CharDB.history.cmdhistory[editBox:GetName()] or {}
-    local cmdindex = #cmdhistory
-
-    -- where there"s a while, there"s a way
-    while cmdindex > 0 do
-      editBox:AddHistoryLine(cmdhistory[cmdindex])
-      cmdindex = cmdindex - 1
-      -- way
-    end
-  end
-
-  function module:saveLine(text, editBox)
-    if not text or (text == "") then
-      return false
-    end
-
-    local maxlines = self.db.profile.maxlines
-    local cmdhistory = editBox.history_lines or {}
-
-    if cmdhistory[1] == text then return end
-    
-    table.insert(cmdhistory, 1, text)
-
-    local cmdcount = #cmdhistory - maxlines
-    while cmdcount > 0 do
-      table.remove(cmdhistory)
-      cmdcount = cmdcount - 1
-    end
-  end
-
-  function module:ClearHistory(editBox)
-    editBox = editBox or ChatFrame1EditBox
-
-    local cmdhistory = editBox.history_lines or {}
-    local cmdcount = #cmdhistory
-    while cmdcount > 0 do
-      table.remove(cmdhistory)
-      cmdcount = cmdcount - 1
-    end
-  end
-
-  function module:AddHistoryLine(editBox)
-    editBox = editBox or ChatFrame1EditBox
-
-    -- following code mostly ripped off from Blizzard, but at least I understand it now
-    local text = ""
-    local type = editBox:GetAttribute("chatType")
-    local header = _G["SLASH_" .. type .. "1"]
-
-    if (header) then
-      text = header
-    end
-
-    if (type == "WHISPER") then
-      text = text .. " " .. editBox:GetAttribute("tellTarget")
-    elseif (type == "CHANNEL") then
-      text = "/" .. editBox:GetAttribute("channelTarget")
-    end
-
-    local editBoxText = editBox:GetText();
-    if (strlen(editBoxText) > 0 and not IsSecureCmd(editBoxText:match("^/[%a%d_]+") or "")) then
-      text = (header and (text .. " ") or "") .. editBoxText;
-      self:saveLine(text, editBox)
-    end
-  end
-
-
-  return
+	--[[------------------------------------------------
+		BR: Criação do módulo responsável pelo histórico do chat
+		EN: Creation of the module responsible for chat history
+	------------------------------------------------]]--
+	local module = Prat:NewModule("History", "AceHook-3.0")
+
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
+
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = true,
+			chat_lines_frames = {},
+			chat_lines = 384,
+			max_lines = 50,
+			save_history = false,
+
+			-- BR: Chaves mantidas no padrão legado até a auditoria do Scrollback.lua.
+			-- EN: Keys kept in legacy format until Scrollback.lua is audited.
+			scrollback = true,
+			scrollbackduration = 24,
+			removespam = true,
+			colorgmotd = true,
+			delaygmotd = true,
+		}
+	})
+
+	--[[------------------------------------------------
+		BR: Plugins dinâmicos usados por extensões como Scrollback
+		EN: Dynamic plugins used by extensions such as Scrollback
+	------------------------------------------------]]--
+	module.pluginopts = {}
+
+	--[[------------------------------------------------
+		BR: Migra chaves antigas de profile para o padrão snake_case
+		EN: Migrates old profile keys to the snake_case standard
+	------------------------------------------------]]--
+	local function migrate_profile(profile)
+		if not profile then
+			return
+		end
+
+		if profile.chatlinesframes ~= nil and profile.chat_lines_frames == nil then
+			profile.chat_lines_frames = profile.chatlinesframes
+		end
+		profile.chatlinesframes = nil
+
+		if profile.chatlines ~= nil and profile.chat_lines == nil then
+			profile.chat_lines = profile.chatlines
+		end
+		profile.chatlines = nil
+
+		if profile.maxlines ~= nil and profile.max_lines == nil then
+			profile.max_lines = profile.maxlines
+		end
+		profile.maxlines = nil
+
+		if profile.savehistory ~= nil and profile.save_history == nil then
+			profile.save_history = profile.savehistory
+		end
+		profile.savehistory = nil
+
+		profile.chat_lines_frames = profile.chat_lines_frames or {}
+		if profile.chat_lines == nil then
+			profile.chat_lines = 384
+		end
+		if profile.max_lines == nil then
+			profile.max_lines = 50
+		end
+		if profile.save_history == nil then
+			profile.save_history = false
+		end
+
+		-- BR: Compatibilidade ativa com Scrollback.lua ainda não auditado.
+		-- EN: Active compatibility with Scrollback.lua, which has not been audited yet.
+		if profile.scrollback == nil then
+			profile.scrollback = true
+		end
+		if profile.scrollbackduration == nil then
+			profile.scrollbackduration = 24
+		end
+		if profile.removespam == nil then
+			profile.removespam = true
+		end
+		if profile.colorgmotd == nil then
+			profile.colorgmotd = true
+		end
+		if profile.delaygmotd == nil then
+			profile.delaygmotd = true
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Construção da interface de configuração do módulo
+		EN: Module configuration interface construction
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module.name, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		childGroups = "tab",
+		plugins = module.pluginopts,
+		args = {
+			overview = {
+				type = "group",
+				name = PL["overview_tab_name"],
+				desc = PL["overview_tab_desc"],
+				order = 10,
+				args = {
+					description = {
+						name = PL["full_description"],
+						type = "description",
+						order = 10,
+						width = "full",
+					},
+
+					spacer_after_description = {
+						type = "description",
+						name = "\n",
+						order = 15,
+						width = "full",
+					},
+
+					quick_guide_header = {
+						name = PL["quick_guide_header"],
+						type = "header",
+						order = 20,
+					},
+
+					quick_guide = {
+						name = PL["quick_guide"],
+						type = "description",
+						order = 30,
+						width = "full",
+					},
+				},
+			},
+
+			chat_lines_group = {
+				type = "group",
+				name = PL["chat_lines_group_name"],
+				desc = PL["chat_lines_group_desc"],
+				order = 20,
+				args = {
+					chat_lines_help = {
+						name = PL["chat_lines_help"],
+						type = "description",
+						order = 10,
+						width = "full",
+					},
+
+					chat_lines_frames = {
+						name = PL["chat_lines_frames_name"],
+						desc = PL["chat_lines_frames_desc"],
+						type = "multiselect",
+						width = "full",
+						order = 20,
+						values = Prat.HookedFrameList,
+						get = "GetSubValue",
+						set = "SetSubValue",
+					},
+
+					spacer_after_frames = {
+						type = "description",
+						name = "\n",
+						order = 25,
+						width = "full",
+					},
+
+					chat_lines = {
+						name = PL["chat_lines_name"],
+						desc = PL["chat_lines_desc"],
+						type = "range",
+						order = 30,
+						width = 1.35,
+						min = 300,
+						max = 5000,
+						step = 10,
+						bigStep = 50,
+					},
+				}
+			},
+
+			command_history_group = {
+				type = "group",
+				name = PL["command_history_group_name"],
+				desc = PL["command_history_group_desc"],
+				order = 30,
+				args = {
+					command_history_help = {
+						name = PL["command_history_help"],
+						type = "description",
+						order = 10,
+						width = "full",
+					},
+
+					save_history = {
+						name = PL["save_history_name"],
+						desc = PL["save_history_desc"],
+						type = "toggle",
+						order = 20,
+						width = "full",
+					},
+
+					max_lines = {
+						name = PL["max_lines_name"],
+						desc = PL["max_lines_desc"],
+						type = "range",
+						order = 30,
+						width = 1.35,
+						min = 0,
+						max = 500,
+						step = 10,
+						bigStep = 50,
+						disabled = function()
+							return not module.db.profile.save_history
+						end,
+					},
+				}
+			},
+		}
+	})
+
+	--[[------------------------------------------------
+		BR: Executa uma função em todos os editboxes de chat
+		EN: Executes a function on all chat editboxes
+	------------------------------------------------]]--
+	local function apply_edit_box(func)
+		for i = 1, NUM_CHAT_WINDOWS do
+			local edit_box = _G["ChatFrame" .. i .. "EditBox"]
+			if edit_box then
+				func(edit_box)
+			end
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Inicializa histórico persistente e instala hooks nos editboxes
+		EN: Initializes persistent history and installs editbox hooks
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		migrate_profile(self.db.profile)
+
+		Prat3CharDB = Prat3CharDB or {}
+		Prat3CharDB.history = Prat3CharDB.history or {}
+		Prat3CharDB.history.cmdhistory = Prat3CharDB.history.cmdhistory or {}
+
+		for i, value in ipairs(Prat3CharDB.history.cmdhistory) do
+			if type(value) == "string" and value:sub(1, 9) ~= "ChatFrame" then
+				Prat3CharDB.history.cmdhistory[i] = nil
+			end
+		end
+
+		apply_edit_box(function(edit_box)
+			local name = edit_box:GetName()
+			Prat3CharDB.history.cmdhistory[name] = Prat3CharDB.history.cmdhistory[name] or {}
+		end)
+
+		self:configure_all_chat_frames()
+
+		for key in pairs(Prat3CharDB.history.cmdhistory) do
+			local edit_box = _G[key]
+			if edit_box then
+				if not self:IsHooked(edit_box, "AddHistoryLine") then
+					self:SecureHook(edit_box, "AddHistoryLine")
+				end
+
+				if self.db.profile.save_history then
+					self:add_saved_history(edit_box)
+				end
+
+				if not self:IsHooked(edit_box, "ClearHistory") then
+					self:SecureHook(edit_box, "ClearHistory")
+				end
+			end
+		end
+
+		-- BR: Remove dados antigos que pertenciam ao profile do módulo.
+		-- EN: Removes old data that used to belong to the module profile.
+		if self.db.profile.cmdhistory then
+			self.db.profile.cmdhistory = nil
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Retorna descrição localizada do módulo
+		EN: Returns localized module description
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
+
+	--[[------------------------------------------------
+		BR: Restaura quantidade padrão de linhas do chat
+		EN: Restores default chat line count
+	------------------------------------------------]]--
+	function module:OnModuleDisable()
+		self:configure_all_chat_frames(384)
+	end
+
+	--[[------------------------------------------------
+		BR: Aplica limites de histórico e configura histórico de comandos
+		EN: Applies history limits and configures command history
+	------------------------------------------------]]--
+	function module:configure_all_chat_frames(lines)
+		migrate_profile(self.db.profile)
+
+		local profile = self.db.profile
+		lines = lines or profile.chat_lines
+
+		for frame_name in pairs(profile.chat_lines_frames) do
+			self:set_history(_G[frame_name], lines)
+		end
+
+		if not (Prat3CharDB and Prat3CharDB.history and Prat3CharDB.history.cmdhistory) then
+			return
+		end
+
+		for key in pairs(Prat3CharDB.history.cmdhistory) do
+			local edit_box = _G[key]
+			if edit_box then
+				if profile.save_history then
+					edit_box:SetHistoryLines(profile.max_lines)
+					edit_box.history_lines = Prat3CharDB.history.cmdhistory[key]
+				else
+					edit_box.history_lines = {}
+				end
+				edit_box.history_index = 0
+			end
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Reaplica configurações por janela após alteração individual
+		EN: Reapplies per-frame settings after individual changes
+	------------------------------------------------]]--
+	function module:OnSubValueChanged()
+		self:configure_all_chat_frames()
+	end
+
+	module.OnSubvalueChanged = module.OnSubValueChanged
+
+	--[[------------------------------------------------
+		BR: Reaplica configurações globais após alteração do usuário
+		EN: Reapplies global settings after user changes
+	------------------------------------------------]]--
+	function module:OnValueChanged()
+		self:configure_all_chat_frames()
+	end
+
+	--[[------------------------------------------------
+		BR: Define quantidade máxima de linhas armazenadas pelo frame
+		EN: Sets the maximum number of lines stored by the frame
+	------------------------------------------------]]--
+	function module:set_history(frame, lines)
+		if frame == nil then
+			return
+		end
+
+		frame:SetMaxLines(lines)
+	end
+
+	--[[------------------------------------------------
+		BR: Restaura histórico salvo no editbox atual
+		EN: Restores saved history into the current editbox
+	------------------------------------------------]]--
+	function module:add_saved_history(edit_box)
+		edit_box = edit_box or ChatFrame1EditBox
+		local command_history = Prat3CharDB.history.cmdhistory[edit_box:GetName()] or {}
+		local command_index = #command_history
+
+		-- where there's a while, there's a way
+		while command_index > 0 do
+			edit_box:AddHistoryLine(command_history[command_index])
+			command_index = command_index - 1
+			-- way
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Salva comando digitado respeitando limite máximo configurado
+		EN: Saves typed commands respecting configured maximum limit
+	------------------------------------------------]]--
+	function module:save_line(text, edit_box)
+		if not text or text == "" then
+			return false
+		end
+
+		local max_lines = self.db.profile.max_lines
+		local command_history = edit_box.history_lines or {}
+
+		if command_history[1] == text then
+			return
+		end
+
+		table.insert(command_history, 1, text)
+
+		local command_count = #command_history - max_lines
+		while command_count > 0 do
+			table.remove(command_history)
+			command_count = command_count - 1
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Limpa histórico persistente do editbox
+		EN: Clears persistent editbox history
+	------------------------------------------------]]--
+	function module:clear_history(edit_box)
+		edit_box = edit_box or ChatFrame1EditBox
+
+		local command_history = edit_box.history_lines or {}
+		local command_count = #command_history
+		while command_count > 0 do
+			table.remove(command_history)
+			command_count = command_count - 1
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Reconstrói e registra comandos digitados no histórico
+		EN: Rebuilds and records typed commands into history
+	------------------------------------------------]]--
+	function module:add_history_line(edit_box)
+		edit_box = edit_box or ChatFrame1EditBox
+
+		-- BR: Código baseado no comportamento original da Blizzard.
+		-- EN: Code based on Blizzard's original behavior.
+		local text = ""
+		local chat_type = edit_box:GetAttribute("chatType")
+		local header = _G["SLASH_" .. chat_type .. "1"]
+
+		if header then
+			text = header
+		end
+
+		if chat_type == "WHISPER" and edit_box:GetAttribute("tellTarget") ~= nil then
+			text = text .. " " .. edit_box:GetAttribute("tellTarget")
+		elseif chat_type == "CHANNEL" and edit_box:GetAttribute("channelTarget") ~= nil then
+			text = "/" .. edit_box:GetAttribute("channelTarget")
+		end
+
+		local edit_box_text = edit_box:GetText()
+		if strlen(edit_box_text) > 0 and not IsSecureCmd(edit_box_text:match("^/[%a%d_]+") or "") then
+			text = (header and (text .. " ") or "") .. edit_box_text
+			self:save_line(text, edit_box)
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Aliases legados para hooks e chamadas externas
+		EN: Legacy aliases for hooks and external calls
+	------------------------------------------------]]--
+	module.ConfigureAllChatFrames = module.configure_all_chat_frames
+	module.SetHistory = module.set_history
+	module.AddSavedHistory = module.add_saved_history
+	module.addSavedHistory = module.add_saved_history
+	module.SaveLine = module.save_line
+	module.saveLine = module.save_line
+	module.ClearHistory = module.clear_history
+	module.AddHistoryLine = module.add_history_line
+
+	return
 end) -- Prat:AddModuleToLoad

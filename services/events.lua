@@ -1,77 +1,90 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      events.lua
+    @Project:   Prat-3.0
 
+    BR: Serviço de controle e roteamento de eventos do chat.
+        - Definição de tipos de processamento
+        - Mapeamento de eventos suportados
+        - Controle dinâmico de processamento
+        - Gerenciamento do pipeline de eventos
 
---[[ BEGIN STANDARD HEADER ]] --
+    EN: Chat event routing and processing control service.
+        - Processing type definitions
+        - Supported event mapping
+        - Dynamic processing control
+        - Event pipeline management
 
--- Imports
-local _G = _G
-local type = type
-local strsub = strsub
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
 
--- Isolate the environment
-setfenv(1, select(2, ...))
+local _, private = ...
 
---[[ END STANDARD HEADER ]] --
-
-local eventMap = {
-  CHAT_MSG_CHANNEL = true,
-  CHAT_MSG_SAY = true,
-  CHAT_MSG_GUILD = true,
-  CHAT_MSG_WHISPER = true,
-  CHAT_MSG_WHISPER_INFORM = true,
-  CHAT_MSG_YELL = true,
-  CHAT_MSG_PARTY = true,
-  CHAT_MSG_PARTY_LEADER = true,
-  CHAT_MSG_OFFICER = true,
-  CHAT_MSG_RAID = true,
-  CHAT_MSG_RAID_LEADER = true,
-  CHAT_MSG_RAID_WARNING = true,
-  CHAT_MSG_INSTANCE_CHAT = true,
-  CHAT_MSG_INSTANCE_CHAT_LEADER = true,
-  CHAT_MSG_SYSTEM = true,
-  CHAT_MSG_DND = true,
-  CHAT_MSG_AFK = true,
-  CHAT_MSG_BN_WHISPER = true,
-  CHAT_MSG_BN_WHISPER_INFORM = true,
-  CHAT_MSG_BN_CONVERSATION = true,
-  CHAT_MSG_COMMUNITIES_CHANNEL = true
+--[[------------------------------------------------
+    BR: Tipos de processamento utilizados no pipeline.
+    EN: Processing types used in the pipeline.
+------------------------------------------------]]--
+private.EventProcessingType = {
+	Full = 1,
+	PatternsOnly = 2,
 }
 
-function EnableProcessingForEvent(event, flag)
-  if flag == nil or flag == true then
-    eventMap[event] = true
-  else
-    eventMap[event] = nil
-  end
+--[[------------------------------------------------
+    BR: Mapeamento de eventos processados pelo addon.
+    EN: Mapping of events processed by the addon.
+------------------------------------------------]]--
+local eventMap = {
+	CHAT_MSG_CHANNEL = private.EventProcessingType.Full,
+	CHAT_MSG_SAY = private.EventProcessingType.Full,
+	CHAT_MSG_GUILD = private.EventProcessingType.Full,
+	CHAT_MSG_WHISPER = private.EventProcessingType.Full,
+	CHAT_MSG_WHISPER_INFORM = private.EventProcessingType.Full,
+	CHAT_MSG_YELL = private.EventProcessingType.Full,
+	CHAT_MSG_PARTY = private.EventProcessingType.Full,
+	CHAT_MSG_PARTY_LEADER = private.EventProcessingType.Full,
+	CHAT_MSG_OFFICER = private.EventProcessingType.Full,
+	CHAT_MSG_RAID = private.EventProcessingType.Full,
+	CHAT_MSG_RAID_LEADER = private.EventProcessingType.Full,
+	CHAT_MSG_RAID_WARNING = private.EventProcessingType.Full,
+	CHAT_MSG_INSTANCE_CHAT = private.EventProcessingType.Full,
+	CHAT_MSG_INSTANCE_CHAT_LEADER = private.EventProcessingType.Full,
+	CHAT_MSG_SYSTEM = private.EventProcessingType.Full,
+	CHAT_MSG_DND = private.EventProcessingType.Full,
+	CHAT_MSG_AFK = private.EventProcessingType.Full,
+	CHAT_MSG_BN_WHISPER = private.EventProcessingType.Full,
+	CHAT_MSG_BN_WHISPER_INFORM = private.EventProcessingType.Full,
+	CHAT_MSG_BN_CONVERSATION = private.EventProcessingType.Full,
+	CHAT_MSG_COMMUNITIES_CHANNEL = private.EventProcessingType.Full,
+
+	--[[--------------------------------------------
+	    BR: Eventos que utilizam apenas matching/patterns.
+	    EN: Events using pattern-only processing.
+	--------------------------------------------]]--
+	CHAT_MSG_LOOT = private.EventProcessingType.PatternsOnly,
+}
+
+--[[------------------------------------------------
+    BR: Habilita, altera ou desabilita processamento de evento.
+    EN: Enables, changes or disables event processing.
+------------------------------------------------]]--
+function private.EnableProcessingForEvent(event, flag)
+	if flag == nil or flag == true then
+		eventMap[event] = private.EventProcessingType.Full
+
+	elseif flag ~= false then
+		eventMap[event] = flag
+
+	else
+		eventMap[event] = nil
+	end
 end
 
-function EventIsProcessed(event)
-  return eventMap[event] or false
+--[[------------------------------------------------
+    BR: Verifica se um evento possui processamento ativo.
+    EN: Checks whether an event has active processing.
+------------------------------------------------]]--
+function private.EventIsProcessed(event)
+	return eventMap[event]
 end
-
-
-

@@ -1,281 +1,235 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2020  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      Mentions.lua
+    @Project:   Prat-3.0
 
+    BR: Suporte experimental a menções de jogadores no chat.
+        - Detecta @nome em mensagens enviadas
+        - Envia whisper automático ao jogador mencionado
+        - Suporte a autocomplete com AceTab
+        - Integração com PlayerNames e ServerNames
+
+    EN: Experimental support for player mentions in chat.
+        - Detects @name in outgoing messages
+        - Automatically whispers the mentioned player
+        - AceTab autocomplete support
+        - PlayerNames and ServerNames integration
+
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
+
+--[[------------------------------------------------
+    BR: Compatibilidade com APIs antigas e modernas de envio de mensagem
+    EN: Compatibility with old and modern chat message sending APIs
+------------------------------------------------]]--
+local SendChatMessage = C_ChatInfo.SendChatMessage or SendChatMessage
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
 Prat:AddModuleToLoad(function()
-  local function dbg(...) end
-
-  --@debug@
-  function dbg(...) Prat:PrintLiteral(...) end
-
-  --@end-debug@
-
-  local PRAT_MODULE = Prat:RequestModuleName("Mentions")
-
-  if PRAT_MODULE == nil then
-    return
-  end
-
-  local module = Prat:NewModule(PRAT_MODULE, "AceHook-3.0")
-
-  -- define localized strings
-  local PL = module.PL
-
-
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = false,
-    }
-  })
-
-  --@debug@
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["module_name"] = "Mentions",
-    ["module_desc"] = "Support mentioning other players in chat",
-    module_info = "THIS MODULE IS EXPERIMENTAL= It adds the ability to @mention people in chat to alert them>",
-  })
-  --@end-debug@
-
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-
-
-  --[===[@non-debug@
-do
-    local L
-
-
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "enUS", L)
-
-
-
---@localization(locale="itIT", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "itIT", L)
-
-
-
---@localization(locale="ptBR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "ptBR", L)
-
-
-
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "frFR", L)
-
-
-
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "deDE", L)
-
-
-
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "koKR",  L)
-
-
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "esMX",  L)
-
-
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "ruRU",  L)
-
-
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "zhCN",  L)
-
-
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "esES",  L)
-
-
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Mentions")@
-PL:AddLocale(PRAT_MODULE, "zhTW",  L)
-end
---@end-non-debug@]===]
-
-  local toggleOption = {
-    name = function(info) return info.handler.PL[info[#info] .. "_name"] end,
-    desc = function(info) return info.handler.PL[info[#info] .. "_desc"] end,
-    type = "toggle",
-  }
-
-  Prat:SetModuleOptions(module.name, {
-    name = PL.module_name,
-    desc = PL.module_desc,
-    type = "group",
-    args = {
-      info = {
-        name = PL.module_info,
-        type = "description",
-      }
-    }
-  })
-
-  local CLR = Prat.CLR
-
-  local function GetChatCLR(name)
-    if name == nil then return CLR.COLOR_NONE end
-
-    local type = strsub(name, 10);
-    local info = ChatTypeInfo[type];
-    if not info then
-      return CLR.COLOR_NONE
-    end
-    return CLR:GetHexColor(info)
-  end
-
-  local function ChatType(text, type) return CLR:Colorize(GetChatCLR(type), text) end
-
-  local function channelLink(name, type, channel)
-    return "|Hchannel:" .. type .. ":" .. (channel or "0") .. "|h[" .. ChatType(name, "CHAT_MSG_" .. type) .. "]|h"
-  end
-
-  local function handleMention(match, m)
-    if m == nil then return end
-
---    dbg(match, m)
-    local name = match:sub(2)
-    local event = "CHAT_MSG_" .. m.CTYPE
-    local from = "(in " .. _G[event] .. ") "
---    dbg(from)
-    SendChatMessage(from .. m.MESSAGE, "WHISPER", GetDefaultLanguage("player"), name);
-  end
-
-  Prat:SetModulePatterns(module, {
-    { pattern = "@%S+", matchfunc = handleMention, priority = 47, type = "OUTBOUND" }
-  })
-
-  function module:OnModuleEnable()
-    self:RegisterTabComplete()
-    Prat.RegisterChatEvent(self, "Prat_FrameMessage")
---    self:SecureHook("ChatEdit_OnChar")
-  end
-
-  function module:Prat_FrameMessage(arg, message, frame, event)
---    message.MESSAGE:gsub("%(in ([^)]+)%)", function(type) end)
-  end
-
-  function module:ChatEdit_OnChar(frame)
-    local start, index
-
-    index = frame:GetCursorPosition()
-
---    dbg("OnChar", frame:GetText())
-    local regex = "@(%S+)"
-    local text = frame:GetText()
-
-    while text:byte(index) ~= 32 do
-      if text:byte(index) == 64 then
-        start = index + 1
-        break;
-      end
-      index = index - 1
-
-      if index <= 0 then
-        break
-      end
-    end
-    local target
-    if start then
-      target = text:sub(start, frame:GetCursorPosition())
-    end
-    if (target) then --if they typed a command with a autocompletable target
-      AutoCompleteEditBox_SetAutoCompleteSource(frame, GetAutoCompleteResults,
-        AUTOCOMPLETE_LIST_TEMPLATES.ONLINE_NOT_BNET.include,  AUTOCOMPLETE_LIST_TEMPLATES.ONLINE_NOT_BNET.exclude)
---    dbg(target)
-      local utf8Position = frame:GetUTF8CursorPosition();
-      local allowFullMatch = false;
-      local nameToShow = frame.autoCompleteSource(target, 1, utf8Position, allowFullMatch, unpack(frame.autoCompleteParams))[1];
---    dbg(nameToShow)
-      if (nameToShow and nameToShow.name) then
-        local name = Ambiguate(nameToShow.name, "all");
-        --We're going to be setting the text programatically which will clear the userInput flag on the editBox.
-        --So we want to manually update the dropdown before we change the text.
-        AutoComplete_Update(frame, target, utf8Position);
-        if strsub(name, 1, 1) ~= "|" then
-          target = escapePatternSymbols(target);
-
-          local newTarget = name;
-
---        dbg(newTarget, text, target, frame:GetCursorPosition())
-        local newText = text:sub(1, frame:GetCursorPosition() - target:len())..newTarget..text:sub(frame:GetCursorPosition()+1)
-          frame:SetText(newText);
---          frame:HighlightText(strlen(text), strlen(command) + strlen(whitespace) + strlen(newTarget));
-        end
-      end
-    end
-  end
-
-  function module:RegisterTabComplete()
-    local CLR = Prat.CLR
-    local AceTab = LibStub("AceTab-3.0")
-    local tabcompleteName = "mentions-tab-complete"
-    local servernames = Prat.Addon:GetModule("ServerNames", true)
-    local playernames = Prat.Addon:GetModule("PlayerNames", true)
-
-    if not AceTab:IsTabCompletionRegistered(tabcompleteName) then
-      local foundCache = {}
-      AceTab:RegisterTabCompletion(tabcompleteName, "@",
-        function(t, ...)
-          --          dbg(t, ...)
-          for name in pairs(playernames.Classes) do
-            table.insert(t, name)
-          end
-        end,
-        function(u, cands, ...)
-          local candcount = #cands
-          if candcount <= playernames.db.profile.tabcompletelimit then
-            local text
-            for key, cand in pairs(cands) do
-              if servernames then
-                local plr, svr = key:match("([^%-]+)%-?(.*)")
-
-                cand = CLR:Player(cand, plr, playernames:getClass(key))
-
-                if svr then
-                  svr = servernames:FormatServer(nil, servernames:GetServerKey(svr))
-                  cand = cand .. (svr and ("-" .. svr) or "")
-                end
-              else
-                cand = CLR:Player(cand, cand, playernames:getClass(cand))
-              end
-
-
-              text = text and (text .. ", " .. cand) or cand
-            end
-            return "   " .. text
-          else
-            return "   " .. ("Too many matches (%d possible)"):format(candcount)
-          end
-        end,
-        nil,
-        function(name)
-          return name:gsub(Prat.MULTIBYTE_FIRST_CHAR, string.upper, 1):match("^[^%-]+")
-        end)
-    end
-  end
+	--[[------------------------------------------------
+		BR: Criação do módulo de menções com suporte a hooks
+		EN: Creation of the mentions module with hook support
+	------------------------------------------------]]--
+	local module = Prat:NewModule("Mentions", "AceHook-3.0")
+	local PL = module.PL
+
+	--[[------------------------------------------------
+		BR: Configuração dos valores padrão do módulo
+		EN: Module default values configuration
+	------------------------------------------------]]--
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = false,
+		}
+	})
+
+	--[[------------------------------------------------
+		BR: Interface de configuração do módulo
+		EN: Module configuration interface
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module.name, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		args = {
+			description = {
+				name = PL["full_description"],
+				type = "description",
+				order = 10,
+				width = "full",
+			},
+
+			spacer_after_description = {
+				type = "description",
+				name = "\n",
+				order = 15,
+				width = "full",
+			},
+
+			how_it_works_header = {
+				name = PL["how_it_works_header"],
+				type = "header",
+				order = 20,
+			},
+
+			how_it_works = {
+				name = PL["how_it_works"],
+				type = "description",
+				order = 30,
+				width = "full",
+			},
+
+			spacer_after_how_it_works = {
+				type = "description",
+				name = "\n",
+				order = 35,
+				width = "full",
+			},
+
+			features_header = {
+				name = PL["features_header"],
+				type = "header",
+				order = 40,
+			},
+
+			features = {
+				name = PL["features"],
+				type = "description",
+				order = 50,
+				width = "full",
+			},
+
+			spacer_after_features = {
+				type = "description",
+				name = "\n",
+				order = 55,
+				width = "full",
+			},
+
+			example_header = {
+				name = PL["example_header"],
+				type = "header",
+				order = 60,
+			},
+
+			example = {
+				name = PL["example"],
+				type = "description",
+				order = 70,
+				width = "full",
+			},
+
+			spacer_before_warning = {
+				type = "description",
+				name = "\n",
+				order = 75,
+				width = "full",
+			},
+
+			warning = {
+				name = PL["warning"],
+				type = "description",
+				order = 80,
+				width = "full",
+			},
+		}
+	})
+
+	--[[------------------------------------------------
+		BR: Processa @nome em mensagens enviadas e dispara whisper
+		EN: Processes @name in outgoing messages and sends whisper
+	------------------------------------------------]]--
+	local function handle_mention(match, message)
+		if Prat.IsRetail and InCombatLockdown() then
+			return
+		end
+
+		if not match or not message or not message.MESSAGE or not message.CTYPE then
+			return
+		end
+
+		local name = match:sub(2)
+
+		if name == "" then
+			return
+		end
+
+		local event = "CHAT_MSG_" .. message.CTYPE
+		local from = PL["mention_whisper_prefix"]:format(_G[event] or event)
+
+		SendChatMessage(from .. message.MESSAGE, "WHISPER", GetDefaultLanguage("player"), name)
+	end
+
+	--[[------------------------------------------------
+		BR: Registra pattern outbound para capturar menções
+		EN: Registers outbound pattern to capture mentions
+	------------------------------------------------]]--
+	Prat:SetModulePatterns(module, {
+		{ pattern = "@%S+", matchfunc = handle_mention, priority = 47, type = "OUTBOUND" }
+	})
+
+	--[[------------------------------------------------
+		BR: Ativa autocomplete de menções
+		EN: Enables mention autocomplete
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		self:register_tab_complete()
+	end
+
+	--[[------------------------------------------------
+		BR: Registra autocomplete de @nomes usando AceTab
+		EN: Registers @name autocomplete using AceTab
+	------------------------------------------------]]--
+	function module:register_tab_complete()
+		local CLR = Prat.CLR
+		local AceTab = LibStub("AceTab-3.0")
+		local tab_complete_name = "mentions-tab-complete"
+		local server_names = Prat:GetModule("ServerNames")
+		local player_names = Prat:GetModule("PlayerNames")
+
+		if not AceTab:IsTabCompletionRegistered(tab_complete_name) then
+			AceTab:RegisterTabCompletion(tab_complete_name, "@",
+				function(matches)
+					for name in pairs(player_names.Classes) do
+						table.insert(matches, name)
+					end
+				end,
+				function(_, candidates)
+					local candidate_count = #candidates
+					local tab_complete_limit = player_names.db.profile.tab_complete_limit or player_names.db.profile.tabcompletelimit or 20
+
+					if candidate_count <= tab_complete_limit then
+						local text
+						for key, candidate in pairs(candidates) do
+							if server_names then
+								local player, server = key:match("([^%-]+)%-?(.*)")
+
+								candidate = CLR:Player(candidate, player, player_names:getClass(key))
+
+								if server then
+									server = server_names:FormatServer(nil, server_names:GetServerKey(server))
+									candidate = candidate .. (server and ("-" .. server) or "")
+								end
+							else
+								candidate = CLR:Player(candidate, candidate, player_names:getClass(candidate))
+							end
+
+							text = text and (text .. ", " .. candidate) or candidate
+						end
+						return "   " .. text
+					else
+						return "   " .. PL["too_many_matches"]:format(candidate_count)
+					end
+				end,
+				nil,
+				function(name)
+					return name:gsub(Prat.MULTIBYTE_FIRST_CHAR, string.upper, 1):match("^[^%-]+")
+				end)
+		end
+	end
 end)

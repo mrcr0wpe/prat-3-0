@@ -1,0 +1,105 @@
+<Bindings>
+	<!-- ChannelNames -->
+	<Binding name="PRAT_OFFICER" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/o");
+	</Binding>
+	<Binding name="PRAT_GUILD" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/g");
+	</Binding>
+ 	<Binding name="PRAT_PARTY" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/p");
+	</Binding>
+	<Binding name="PRAT_RAID" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/raid");
+	</Binding>
+	<Binding name="PRAT_RAIDWARN" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/rw");
+	</Binding>
+	<Binding name="PRAT_INSTANCE" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/i");
+	</Binding>
+	<Binding name="PRAT_SAY" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/say");
+	</Binding>
+	<Binding name="PRAT_YELL" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/yell");
+	</Binding>
+	<Binding name="PRAT_WHISPER" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/w");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_ONE" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/1");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_TWO" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/2");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_THREE" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/3");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_FOUR" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/4");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_FIVE" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/5");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_SIX" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/6");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_SEVEN" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/7");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_EIGHT" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/8");
+	</Binding>
+	<Binding name="PRAT_CHANNEL_NINE" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/9");
+	</Binding>
+	<Binding name="PRAT_SMARTGROUP" category="Prat">
+		local ChatFrame_OpenChat = _G.ChatFrame_OpenChat or _G.ChatFrameUtil.OpenChat
+		ChatFrame_OpenChat("/smart");
+	</Binding>
+	<Binding name="PRAT_NEXTTAB" category="Prat">
+		local mod = Prat:GetModule("KeyBindings")
+		if mod then
+			mod:CycleChatTabs()
+		end
+	</Binding>
+	<!-- TellTarget -->
+	<Binding name="PRAT_TELLTARGET" category="Prat">
+		local mod = Prat:GetModule("TellTarget")
+		if mod then
+			mod:SendTellToTarget(SELECTED_CHAT_FRAME, "");
+		end
+	</Binding>
+	<!-- CopyChat -->
+	<Binding name="PRAT_COPYSELECTED" category="Prat">
+		local mod = Prat:GetModule("CopyChat")
+		if mod then
+			mod:CopyChat();
+		end
+	</Binding>
+	<Binding name="PRAT_SCROLLBOTTOM" category="Prat">
+		SELECTED_CHAT_FRAME:ScrollToBottom()
+	</Binding>
+	<Binding name="PRAT_SCROLLTOP" category="Prat">
+		SELECTED_CHAT_FRAME:ScrollToTop()
+	</Binding>
+</Bindings>

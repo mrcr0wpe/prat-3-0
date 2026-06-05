@@ -1,50 +1,59 @@
-#@retail@
-## Interface: 90002
-#@end-retail@
-#@non-retail@
-# ## Interface: 11304
-#@end-non-retail@
+## Interface: 110001, 110105, 110107, 120001, 120005
 
 ## X-Curse-Project-ID: 7473
 ## X-WoWI-ID: 10783
+## X-Wago-ID: RNL9ae6o
 
 ## Title: Prat |cff8080ff3.0|r
-## Notes: A framework for chat ehancement modules.
-## Title-zhCN: Prat |cff8080ff3.0|r
-## Notes-zhCN: 整合的聊天增强助手
-## Notes-zhTW: 整合的聊天視窗模組。
-## Notes-frFR: Framework pour des modules concernant les fen\195\170tres de discussion
-## Notes-esES: Un entorno para modulos de chat.
-## Notes-deDE: Ein Grundaddon für Chatfenstermodule.
-## Notes-koKR: 대화창에 대한 다양한 기능을 제공하는 애드온입니다.
-## Notes-ruRU: Фреймворк для чата. Это БЕТА-версия, а значит возможны баги и глюки.
-## Version: @project-version@
+## Notes: A framework for chat enhancement modules.
+## Notes-ptBR: Estrutura modular para módulos de aprimoramento do bate-papo.
+## Notes-ptPT: Estrutura modular para módulos de melhoria da conversação.
+## Notes-esES: Framework para módulos de mejora del chat.
+## Notes-esMX: Framework para módulos de mejora del chat.
+## Notes-frFR: Framework pour modules d'amélioration de la discussion.
+## Notes-itIT: Framework per moduli di miglioramento della chat.
+## Notes-deDE: Framework für Module zur Chatverbesserung.
+## Notes-ruRU: Фреймворк для модулей улучшения чата.
+## Notes-koKR: 채팅 기능 개선 모듈을 위한 프레임워크입니다.
+## Notes-zhCN: 聊天增强模块框架。
+## Notes-zhTW: 聊天視窗增強模組框架。
+
+## Category-enUS: Chat
+## Category-ptBR: Bate-papo
+## Category-ptPT: Conversação
+## Category-esES: Chat
+## Category-esMX: Chat
+## Category-frFR: Discussion
+## Category-itIT: Chat
+## Category-deDE: Chat
+## Category-ruRU: Чат
+## Category-koKR: 대화
+## Category-zhCN: 聊天
+## Category-zhTW: 對話
+## Version: 3.9.100
 ## Author: Sylvanaar (Sylvaann - Proudmoore/US-Alliance)
 ## eMail: sylvanaar@mindspring.com
 
-## X-Category: Chat/Communication 
+## X-Revisor: MrCr0w
+
+## X-Category: Chat/Communication
 ## X-Website: http://www.wowace.com/wiki/Prat
 
 ## X-Credits: Prat Dev Team (Sylvanaar, Fin, Curney, Krtek), Industrial, Ammo, Cirk, Yrys (ChatLink), Leuchtturm, AnduinLothar, Satrina, <CWDG>昏睡墨鱼&月色狼影, Zurazzi(Jubei’Thos), Cybeloras
 
 ## X-License: GPLv3
 
-## OptionalDeps: Prat-3.0_Libraries, LibSink-2.0, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibDataBroker-1.1, LibDBIcon-1.0, LibAlts-1.0, LibChatAnims
+## OptionalDeps: LibSink-2.0, LibSharedMedia-3.0, AceGUI-3.0-SharedMediaWidgets, LibDataBroker-1.1, LibDBIcon-1.0, LibAlts-1.0, LibChatAnims
 
-## SavedVariables: Prat3DB 
+## SavedVariables: Prat3DB
 ## SavedVariablesPerCharacter: Prat3CharDB, Prat3HighCPUPerCharDB
 
-#libraries\includes.xml
+## IconTexture: Interface\AddOns\Prat-3.0\textures\prat-logo-dark-small
+## AddonCompartmentFunc: Prat_ToggleOptionsWindow
+
+Libs.xml
 
 fonts\includes.xml
-
 addon\includes.xml
-
 services\includes.xml
-
 modules\includes.xml
-
-modules\highcpu2.xml
-
-
-

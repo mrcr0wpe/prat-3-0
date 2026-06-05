@@ -1,0 +1,48 @@
+<Ui xmlns="http://www.blizzard.com/wow/ui/"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.blizzard.com/wow/ui/
+..\..\FrameXML\UI.xsd">
+
+    <!-- ================================================================= -->
+    <!-- BR: Idioma padrão (Fallback)                                      -->
+    <!-- EN: Base locale (Fallback)                                        -->
+    <!-- ================================================================= -->
+    <Script file="enUS.lua"/>
+
+    <!-- ================================================================= -->
+    <!-- BR: Idiomas Portugueses                                           -->
+    <!-- EN: Portuguese Languages                                          -->
+    <!-- ================================================================= -->
+    <Script file="ptBR.lua"/>
+    <!-- <Script file="ptPT.lua"/> -->
+
+    <!-- ================================================================= -->
+    <!-- BR: Idiomas Espanhóis                                             -->
+    <!-- EN: Spanish Languages                                             -->
+    <!-- ================================================================= -->
+    <!-- <Script file="esES.lua"/> -->
+    <!-- <Script file="esMX.lua"/> -->
+
+    <!-- ================================================================= -->
+    <!-- BR: Idiomas Europeus Ocidentais                                   -->
+    <!-- EN: Western European Languages                                    -->
+    <!-- ================================================================= -->
+    <!-- <Script file="frFR.lua"/> -->
+    <!-- <Script file="itIT.lua"/> -->
+    <!-- <Script file="deDE.lua"/> -->
+
+    <!-- ================================================================= -->
+    <!-- BR: Idioma Russo                                                  -->
+    <!-- EN: Russian Language                                              -->
+    <!-- ================================================================= -->
+    <!-- <Script file="ruRU.lua"/> -->
+
+    <!-- ================================================================= -->
+    <!-- BR: Idiomas Asiáticos                                             -->
+    <!-- EN: Asian Languages                                               -->
+    <!-- ================================================================= -->
+    <!-- <Script file="koKR.lua"/> -->
+    <!-- <Script file="zhCN.lua"/> -->
+    <!-- <Script file="zhTW.lua"/> -->
+
+</Ui>

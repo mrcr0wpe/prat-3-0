@@ -1,567 +1,1191 @@
----------------------------------------------------------------------------------
---
--- Prat - A framework for World of Warcraft chat mods
---
--- Copyright (C) 2006-2018  Prat Development Team
---
--- This program is free software; you can redistribute it and/or
--- modify it under the terms of the GNU General Public License
--- as published by the Free Software Foundation; either version 2
--- of the License, or (at your option) any later version.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to:
---
--- Free Software Foundation, Inc.,
--- 51 Franklin Street, Fifth Floor,
--- Boston, MA  02110-1301, USA.
---
---
--------------------------------------------------------------------------------
+--[[
+    @File:      Alias.lua
+    @Project:   Prat-3.0
 
+    BR: Sistema de criação e expansão de abreviações para comandos de barra ( / ).
+        - Criação, remoção, listagem e busca de abreviações
+        - Expansão automática de comandos digitados
+        - Proteção contra sobrescrita e loops infinitos
+        - Registro dinâmico de comandos de barra ( / ) no Retail
+        - Compatibilidade com o processamento clássico do chat
 
+    EN: Slash command alias creation and expansion system.
+        - Alias creation, removal, listing and search
+        - Automatic expansion of typed commands
+        - Protection against overwrites and infinite loops
+        - Dynamic slash command registration on Retail
+        - Compatibility with classic chat processing
 
+    -------------------------------------------------------
+    Revisão e Tradução: MrCr0w
+    Retail Version: 11.1.5
+    -------------------------------------------------------
+--]]
 
-Prat:AddModuleToLoad(function()
+--[[------------------------------------------------
+    BR: Compatibilidade entre clientes antigos e modernos do chat
+    EN: Compatibility between old and modern chat clients
+------------------------------------------------]]--
+local ChatEdit_ChooseBoxForSend = _G.ChatEdit_ChooseBoxForSend or (_G.ChatFrameUtil and _G.ChatFrameUtil.ChooseBoxForSend)
+local ChatEdit_ParseText = _G.ChatEdit_ParseText or (_G.ChatFrameEditBoxMixin and _G.ChatFrameEditBoxMixin.ParseText)
 
-  local PRAT_MODULE = Prat:RequestModuleName("Alias")
+--[[------------------------------------------------
+    BR: Verifica o bloqueio de mensagens do chat apenas quando a API existir.
+        Em alguns clientes modernos, C_ChatInfo.InChatMessagingLockdown pode não estar disponível.
+    EN: Checks chat messaging lockdown only when the API exists.
+        In some modern clients, C_ChatInfo.InChatMessagingLockdown may not be available.
+------------------------------------------------]]--
+local function is_chat_messaging_locked_down()
+	local chatInfo = _G.C_ChatInfo
+	if chatInfo and chatInfo.InChatMessagingLockdown then
+		return chatInfo.InChatMessagingLockdown()
+	end
 
-  if PRAT_MODULE == nil then
-    return
-  end
-
-  local module = Prat:NewModule(PRAT_MODULE, "AceHook-3.0")
-  local PL = module.PL
-
-  local function dbg(...) end
-
-  --@debug@
-  local function dbg(...)
-    -- Prat:PrintLiteral(...)
-  end
-
-  PL:AddLocale(PRAT_MODULE, "enUS", {
-    ["module_name"] = "Alias",
-    ["module_desc"] = "Adds the command /alias, which can be used to alias slash commands in a similar way to the Unix alias command.",
-    ["add"] = true,
-    ["add an alias"] = true,
-    ['<command>[ <value>] - alias <command> to be executed as <value>, or return the value of the currently defined alias for <command> if <command> has not been assigned a value. eg: "/alias /examplehello /say hello there" - typing "/examplehello" will now cause your character to say "hello there"; "/alias examplehello" - \s "/examplehello is aliased to /say hello there" (cmd aliases: /addalias)'] = true,
-    ["unalias"] = true,
-    ["remove an alias"] = true,
-    ['<alias> - remove the alias <alias> (cmd aliases: /delalias, /remalias)'] = true,
-    ["listaliases"] = true,
-    ["list all aliases"] = true,
-    ['findaliases'] = true,
-    ['find aliases matching a given search term'] = true,
-    ['<keyword> - finds all aliases matching <keyword> (cmd aliases: /findalias)'] = true,
-    ['verbose'] = true,
-    ['Display extra information in the chat frame when commands are dealiased'] = true,
-    ['inline'] = true,
-    ['Expand aliases as you are typing'] = true,
-    ["Options for altering the behaviour of Alias"] = true,
-    ['Options'] = true,
-    ['noclobber'] = true,
-    ["Don't overwrite existing aliases when using /addalias"] = true,
-    [' - list all aliases; suPLy <keyword> to search for matching aliases (cmd aliases: /listallaliases)'] = true,
-    ["%s() called with nil argument!"] = true,
-    ["%s() called with blank string!"] = true,
-    ['refusing to alias "/%s" to anything in the interests of Not Buggering Everything Up'] = true,
-    ['noclobber set - skipping new alias: /%s already expands to /%s'] = true,
-    ['overwriting existing alias "/%s" (was aliased to "/%s")'] = true,
-    ["/%s aliased to: /%s"] = true,
-    ['alias "/%s" does not exist'] = true,
-    ['deleting alias "/%s" (previously aliased as "/%s")'] = true,
-    ['tried to show value for alias "%s" but undefined in module.Aliases!'] = true,
-    ['/%s aliased to "/%s"'] = true,
-    ["No aliases have been defined"] = true,
-    ['There is no alias current defined for "%s"'] = true,
-    ['infinite loop detected for alias /%s - ignoring'] = true,
-    ['dealiasing command /%s to /%s'] = true,
-    ['matching aliases found: %d'] = true,
-    ['total aliases: %d'] = true,
-    ["warnUser() called with nil argument!"] = true,
-    ["warnUser() called with zero length string!"] = true,
-  })
-  --@end-debug@
-
-  -- These Localizations are auto-generated. To help with localization
-  -- please go to http://www.wowace.com/projects/prat-3-0/localization/
-
-
-  --[===[@non-debug@
-do
-    local L
-
-
---@localization(locale="enUS", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "enUS", L)
-
-
-
-
---@localization(locale="itIT", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "itIT", L)
-
-
-
-
---@localization(locale="ptBR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "ptBR", L)
-
-
-
-
---@localization(locale="frFR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "frFR", L)
-
-
-
-
---@localization(locale="deDE", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "deDE", L)
-
-
-
-
---@localization(locale="koKR", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "koKR", L)
-
-
-
-
---@localization(locale="esMX", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "esMX", L)
-
-
-
-
---@localization(locale="ruRU", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "ruRU", L)
-
-
-
-
---@localization(locale="zhCN", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "zhCN", L)
-
-
-
-
---@localization(locale="esES", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "esES", L)
-
-
-
-
---@localization(locale="zhTW", format="lua_table", handle-subnamespaces="none", same-key-is-true=true, namespace="Alias")@
-PL:AddLocale(PRAT_MODULE, "zhTW", L)
-
-
+	return false
 end
---@end-non-debug@]===]
-
-
-
-  Prat:SetModuleDefaults(module.name, {
-    profile = {
-      on = false,
-      aliases = {},
-      verbose = false,
-      inline = false,
-      noclobber = false,
-
-      -- things we won't alias
-      wontalias = {
-        unalias = 1,
-        alias = 1,
-        prat = 1,
-        script = 1,
-        run = 1,
-        ace = 1,
-        ace2 = 1,
-        listaliases = 1,
-        quit = 1,
-        reload = 1,
-        rl = 1,
-      },
-    }
-  })
-
-
-  Prat:SetModuleOptions(module, {
-    name = PL["module_name"],
-    desc = PL["module_desc"],
-    type = "group",
-    args = {
-      add = {
-        type = "input",
-        name = PL["add"],
-        desc = PL["add an alias"],
-        --				usage	= PL['<command>[ <value>] - alias <command> to be executed as <value>, or return the value of the currently defined alias for <command> if <command> has not been assigned a value. eg: "/alias /examplehello /say hello there" - typing "/examplehello" will now cause your character to say "hello there"; "/alias examplehello" - prints "/examplehello is aliased to /say hello there" (cmd aliases: /addalias)'],
-
-        get = false,
-        set = function(info, argstr) return info.handler:setAlias(argstr) end,
-        order = 210,
-      },
-      del = {
-        name = PL["unalias"],
-        desc = PL["remove an alias"],
-        type = "select",
-        --				usage	= PL['<alias> - remove the alias <alias> (cmd aliases: /delalias, /remalias)'],
-        values = function(info) return info.handler.db.profile.aliases end,
-        set = function(info, aliastoremove) return info.handler:delAlias(aliastoremove) end,
-        order = 220,
-        disabled = function(info) return info.handler:NumAliases() == 0 end
-      },
-      find = {
-        name = PL["findaliases"],
-        desc = PL["find aliases matching a given search term"],
-        type = 'input',
-        set = function(info, q) return info.handler:listAliases(q) end,
-        get = false,
-        --				usage	= PL['<keyword> - finds all aliases matching <keyword> (cmd aliases: /findalias)'],
-        order = 230,
-      },
-      list = {
-        name = PL["listaliases"],
-        desc = PL["list all aliases"],
-        type = 'execute',
-        func = function(info) info.handler:listAliases() end,
-        --				usage	= PL[' - list all aliases; suPLy <keyword> to search for matching aliases (cmd aliases: /listallaliases)'],
-        order = 240,
-      },
-      blankheader = {
-        name = "",
-        order = 499,
-        type = 'header',
-      },
-      --[[ OPTIONS ]] --
-      optionsheader = {
-        name = PL["Options"],
-        desc = PL["Options for altering the behaviour of Alias"],
-        type = 'header',
-        order = 500,
-      },
-      inline = {
-        name = PL['inline'],
-        desc = PL['Expand aliases as you are typing'],
-        type = 'toggle',
-        order = 510,
-      },
-      noclobber = {
-        name = PL['noclobber'],
-        desc = PL["Don't overwrite existing aliases when using /addalias"],
-        type = 'toggle',
-        order = 520,
-      },
-      verbose = {
-        name = PL['verbose'],
-        desc = PL['Display extra information in the chat frame when commands are dealiased'],
-        type = 'toggle',
-        order = 530,
-      },
-    }
-  })
-
-  local CLR = Prat.CLR
-
-  local function clralias(text) return CLR:Colorize("64ff64", text:lower()) end
-
-  local function clrexpansion(text) return CLR:Colorize("64ffff", text:lower()) end
-
-  local function clrmodname(text) return CLR:Colorize("ff8080", text) end
-
-
-  -- things to do when the module is enabled
-  function module:OnModuleEnable()
-    self.Aliases = {}
-
-    table.sort(self.db.profile.aliases)
-
-    for k, v in pairs(self.db.profile.aliases) do
-      self.Aliases[k] = v
-    end
-
-    self.WontAlias = self.db.profile.wontalias
-    for naughtyalias, justtrue in pairs(self.WontAlias) do
-      self.WontAlias[string.lower(naughtyalias)] = 1
-    end
-
-    self:RawHook('ChatEdit_HandleChatType', true)
-
-    --	Prat:RegisterChatCommand({ '/alias', '/addalias', }, self.moduleOptions.args.add, 'PRATALIAS')
-    --	Prat:RegisterChatCommand({ '/unalias', '/delalias', '/remalias' }, self.moduleOptions.args.del, 'PRATUNALIAS')
-    --	Prat:RegisterChatCommand({ '/listaliases', '/listallaliases' }, self.moduleOptions.args.list, 'PRATLISTALIASES')
-    --	Prat:RegisterChatCommand({ '/findaliases', '/findalias' }, self.moduleOptions.args.find, 'PRATFINDALIASES')
-
-    Prat.RegisterChatCommand("alias", function(argstr) return self:setAlias(argstr) end)
-    Prat.RegisterChatCommand("unalias", function(argstr) return self:delAlias(argstr) end)
-    Prat.RegisterChatCommand("listaliases", function(argstr) return self:listAliases(argstr) end)
-  end
-
-  -- things to do when the module is disabled
-  function module:OnModuleDisable()
-    -- unregister events
-    --	Prat.UnregisterAllChatEvents(self)
-
-    self:UnhookAll()
-    self.Aliases = nil
-  end
-
-  --[[------------------------------------------------
-      Core Functions
-  ------------------------------------------------]] --
-
-  function module:splitAliasArgs(str)
-    -- str should be "<command>[=value| value]"
-    local name, value
-    local args = {
-      name = "",
-      value = "",
-    }
-
-    -- if it doesn't match, args is left with default blank strings for values
-    --for alias, command in str:find("(%w+)%s*=?%s*(.-)%s*$") do
-    for alias, command in str:gmatch("/?(%w+)%s*[%s=]%s*/?(.-)$") do
-      -- either matches both alias and command (may match command as a blank string)
-      args['name'] = string.lower(alias)
-      args['value'] = command or ""
-      -- util:print('name ' .. args['name'])
-      -- util:print('value ' .. args['value'])
-    end
-
-    return args
-  end
-
-  function module:checkArgStr(funcname, argstr)
-    if argstr == nil then
-      self:warnUser(string.format(PL["%s() called with nil argument!"], funcname))
-      return false
-    end
-
-    if argstr == "" then
-      self:warnUser(string.format(PL["%s() called with blank string!"], funcname))
-      return false
-    end
-
-    return true
-  end
-
-  function module:setAlias(argstr)
-    -- argstr should be "<command>[ <value]"
-    if not self:checkArgStr('setAlias', argstr) then
-      return false
-    end
-
-    local alias = self:splitAliasArgs(argstr)
-
-    -- check to see if the user is defining an alias or not
-    if not alias['value'] or (alias['value'] == "") then
-      local name = argstr
-
-      -- called as: /alias <command> - check for alias called <command> to display
-      if self.Aliases[name] then
-        -- alias found; show it :)
-        self:showAlias(name)
-        return true
-      else
-        -- no alias found called <command>; tell user
-        self:reportUndefinedAlias(name)
-      end
-    elseif self.WontAlias[string.lower(alias['name'])] then
-      -- user is defining an alias called <command>, but it's potentially bad
-      self:warnUser(string.format(PL['refusing to alias "/%s" to anything in the interests of Not Buggering Everything Up'], clralias(alias['name'])))
-      return false
-    elseif self.db.profile.noclobber and self.Aliases[string.lower(alias['name'])] then
-      self:warnUser(string.format(PL['noclobber set - skipping new alias: /%s already expands to /%s'], clralias(alias['name']), clrexpansion(alias['value'])))
-      return false
-    else
-      -- it's not listed as bad, so create or update the aliases tables
-      -- called as /alias <command> <value> - define alias <command> as <value>
-      if self.Aliases[alias['name']] then
-        -- specified alias already exists, warn user and print old setting
-        self:warnUser(string.format(PL['overwriting existing alias "/%s" (was aliased to "/%s")'], clralias(alias['name']), clrexpansion(self.Aliases[alias['name']])))
-      end
-
-      -- now (re?)define the alias <command> to <value>
-      self.Aliases[alias['name']] = alias['value']
-      self.db.profile.aliases[alias['name']] = alias['value']
-
-      table.sort(self.db.profile.aliases)
-      table.sort(self.Aliases)
-
-      LibStub("AceConfigRegistry-3.0"):NotifyChange("Prat")
-
-      self:warnUser(string.format(PL["/%s aliased to: /%s"], clralias(alias['name']), clrexpansion(alias['value'])))
-    end
-  end
-
-  function module:delAlias(aliasname)
-    if not self:checkArgStr('delAlias', aliasname) then
-      return false
-    end
-
-    -- remove unecessary /s at the beginning of the alias name
-    aliasname = aliasname:gsub('^/*', '')
-
-    if not self.Aliases[aliasname] then
-      self:warnUser(string.format(PL['alias "/%s" does not exist'], clralias(aliasname)))
-      return false
-    end
-
-    local oldalias = self.Aliases[aliasname]
-
-    self:warnUser(string.format(PL['deleting alias "/%s" (previously aliased as "/%s")'], clralias(aliasname), clrexpansion(oldalias)))
-
-    self.Aliases[aliasname] = nil
-    self.db.profile.aliases[aliasname] = nil
-
-    LibStub("AceConfigRegistry-3.0"):NotifyChange("Prat")
-
-    return oldalias
-  end
-
-  function module:showAlias(aliasname)
-    if not self:checkArgStr('showAlias', aliasname) then
-      return false
-    end
-
-    -- check for undefined alias called aliasname
-    if not self.Aliases[aliasname] then
-      self:warnUser(string.format(PL['tried to show value for alias "%s" but undefined in module.Aliases!'], clralias(aliasname)))
-      return false
-    end
-
-    -- everything OK; display value of alias "aliasname"
-    self:warnUser(string.format(PL['/%s aliased to "/%s"'], clralias(aliasname), clrexpansion(self.Aliases[aliasname])))
-
-    return true
-  end
-
-  function module:listAliases(q)
-    if self.Aliases == {} then
-      self:warnUser(PL["No aliases have been defined"])
-      return false
-    end
-
-    local msg
-    local count = 0
-
-    table.sort(self.Aliases)
-
-    for name, alias in pairs(self.Aliases) do
-      if not q or (name:match(q)) then
-        self:showAlias(name)
-        count = count + 1
-      end
-    end
-
-    if q then
-      msg = PL['matching aliases found: %d']
-    else
-      msg = PL['total aliases: %d']
-    end
-
-    self:tellUser(string.format(msg, count))
-  end
-
-
-  function module:reportUndefinedAlias(name)
-    return self:warnUser(string.format(PL['There is no alias current defined for "%s"'], clralias(name)))
-  end
-
-  function module:tellUser(str)
-    return module:warnUser(str)
-  end
-
-  function module:NumAliases()
-    local n = 0
-    for name, alias in pairs(self.Aliases) do
-      n = n + 1
-    end
-    return n
-  end
-
-  function module:warnUser(str)
-    if str == nil then
-      str = PL["warnUser() called with nil argument!"]
-    elseif str == "" then
-      str = PL["warnUser() called with zero length string!"]
-    end
-
-    Prat:Print(string.format("%s: %s", clrmodname(self.moduleName), str))
-
-    return true
-  end
-
-
-  local fake = {}
-
-  function module:ChatEdit_HandleChatType(editBox, msg, command, send, dealiased)
-    dbg(msg, command, send, dealiased)
-    local command = command or ""
-    local alias = self.Aliases[string.lower(strsub(command, 2))]
-    Prat.SplitMessageOut.DEALIASED = Prat.SplitMessageOut.DEALIASED or {}
-    local dealiased = Prat.SplitMessageOut.DEALIASED
-    local msg = msg or ""
-
-    if dealiased[command] then
-      -- skip commands we've already dealiased
-      self:warnUser(string.format(PL['infinite loop detected for alias /%s - ignoring'], clralias(alias)))
-    elseif alias and alias ~= "" then
-      if (send == 1) and self.db.profile.verbose then
-        self:warnUser(string.format(PL['dealiasing command /%s to /%s'], clralias(strsub(command, 2)), clrexpansion(alias)))
-        editBox:AddHistoryLine(editBox:GetText())
-      end
-
-      dealiased[command] = true
-      alias = Prat.ReplaceMatches(alias, 'OUTBOUND')
-
-      local newcmd = strmatch(alias, "^/*([^%s]+)") or ""
-      local premsg = strsub(alias, strlen(newcmd) + 2) or ""
-
-      if premsg ~= "" then
-        msg = premsg .. ' ' .. msg
-      end
-
-      command = '/' .. string.upper(newcmd) -- this needs to be upper
-      local text = string.lower(command) -- this needs to be lower
-
-      if msg and msg ~= "" then
-        fake.MESSAGE = msg
-
-        Prat.Addon:ProcessUserEnteredChat(fake)
-
-        msg = fake.MESSAGE
-        text = text .. ' ' .. msg
-      end
-
-      dbg(msg, command, send, dealiased, text)
-
-      if (send == 1) then
-        editBox:SetText(text)
-        dbg("-> ChatEdit_ParseText")
-        ChatEdit_ParseText(editBox, send)
-        return true
-      elseif (self.db.profile.inline) then
-        editBox:SetText(text .. ' ')
-      end
-
-      --self:ChatEdit_HandleChatType(editBox,  msg, command, send, dealiased)
-
-
-      return true
-    end
-
-    dbg("-> ChatEdit_HandleChatType", msg, command, send)
-    return self.hooks["ChatEdit_HandleChatType"](editBox, msg, command, send)
-  end
-
-
-  return
-end) -- Prat:AddModuleToLoad
+
+--[[------------------------------------------------
+    BR: Envia mensagem de bate-papo usando a API disponível no cliente atual.
+        Alguns clientes expõem C_ChatInfo.SendChatMessage; outros mantêm SendChatMessage global.
+    EN: Sends a chat message using the API available in the current client.
+        Some clients expose C_ChatInfo.SendChatMessage; others keep global SendChatMessage.
+------------------------------------------------]]--
+local function send_chat_message_compat(text, chatType, languageID, target)
+	local chatInfo = _G.C_ChatInfo
+	if chatInfo and chatInfo.SendChatMessage then
+		chatInfo.SendChatMessage(text, chatType, languageID, target)
+		return true
+	end
+
+	if _G.SendChatMessage then
+		_G.SendChatMessage(text, chatType, languageID, target)
+		return true
+	end
+
+	return false
+end
+
+--[[------------------------------------------------
+    BR: Registro tardio do módulo para carregamento controlado pelo Prat
+    EN: Deferred module registration for Prat-controlled loading
+------------------------------------------------]]--
+Prat:AddModuleToLoad(function()
+	--[[------------------------------------------------
+		BR: Criação do módulo Alias com suporte a hooks
+		EN: Creation of the Alias module with hook support
+	------------------------------------------------]]--
+	local module = Prat:NewModule("Alias", "AceHook-3.0")
+	--[[------------------------------------------------
+		BR: Referência local às strings centralizadas de localização
+		EN: Local reference to centralized localization strings
+	------------------------------------------------]]--
+	local PL = module.PL
+
+	Prat:SetModuleDefaults(module.name, {
+		profile = {
+			on = false,
+			aliases = {},
+			inline = false,
+			no_clobber = false,
+			protect_commands = true,
+
+			-- BR: Comandos protegidos que não devem virar abreviações.
+			-- EN: Protected commands that should not become aliases.
+			wont_alias = {
+				unalias = 1,
+				alias = 1,
+				prat = 1,
+				script = 1,
+				run = 1,
+				ace = 1,
+				ace2 = 1,
+				listaliases = 1,
+				quit = 1,
+				reload = 1,
+				rl = 1,
+			},
+		}
+	})
+
+	--[[------------------------------------------------
+		BR: Configuração das opções da interface do módulo
+		EN: Module interface options configuration
+	------------------------------------------------]]--
+	--[[------------------------------------------------
+		BR: Interface organizada em abas para comandos abreviados.
+		EN: Tabbed interface for command aliases.
+	------------------------------------------------]]--
+	Prat:SetModuleOptions(module, {
+		name = PL["module_name"],
+		desc = PL["module_desc"],
+		type = "group",
+		childGroups = "tab",
+		args = {
+			overview = {
+				type = "group",
+				name = PL["overview_tab_name"],
+				desc = PL["overview_tab_desc"],
+				order = 10,
+				args = {
+					description = {
+						type = "description",
+						name = PL["full_description"],
+						order = 10,
+						width = "full",
+					},
+
+					spacer_after_description = {
+						type = "description",
+						name = "\n",
+						order = 15,
+						width = "full",
+					},
+
+					quick_guide_header = {
+						type = "header",
+						name = PL["quick_guide_header"],
+						order = 20,
+					},
+
+					quick_guide = {
+						type = "description",
+						name = PL["quick_guide"],
+						order = 30,
+						width = "full",
+					},
+				},
+			},
+
+				management = {
+					type = "group",
+					name = PL["management_tab_name"],
+					desc = PL["management_tab_desc"],
+					order = 20,
+					args = {
+						management_help = {
+							type = "description",
+							name = PL["management_help"],
+							order = 10,
+							width = "full",
+						},
+
+						examples_header = {
+							type = "header",
+							name = PL["examples_header"],
+							order = 15,
+						},
+
+						examples_text = {
+							type = "description",
+							name = PL["examples_text"],
+							order = 16,
+							width = "full",
+						},
+
+						input_usage = {
+							type = "description",
+							name = PL["input_usage"],
+							order = 17,
+							width = "full",
+						},
+
+						builder_header = {
+							type = "header",
+							name = PL["builder_header"],
+							order = 20,
+						},
+
+						builder_help = {
+							type = "description",
+							name = PL["builder_help"],
+							order = 30,
+							width = "full",
+						},
+
+						builder_alias = {
+							type = "input",
+							name = PL["builder_alias_name"],
+							desc = PL["builder_alias_desc"],
+							get = function(info)
+								return info.handler:get_alias_builder_value("name")
+							end,
+							set = function(info, value)
+								info.handler:set_alias_builder_value("name", value)
+							end,
+							order = 40,
+							width = 1.15,
+						},
+
+						builder_command = {
+							type = "select",
+							name = PL["builder_command_name"],
+							desc = PL["builder_command_desc"],
+							values = function(info)
+								return info.handler:get_builder_command_values()
+							end,
+							get = function(info)
+								return info.handler:get_alias_builder_value("command")
+							end,
+							set = function(info, value)
+								info.handler:set_alias_builder_value("command", value)
+							end,
+							order = 50,
+							width = 1.15,
+						},
+
+						builder_message = {
+							type = "input",
+							name = PL["builder_message_name"],
+							desc = PL["builder_message_desc"],
+							get = function(info)
+								return info.handler:get_alias_builder_value("message")
+							end,
+							set = function(info, value)
+								info.handler:set_alias_builder_value("message", value)
+							end,
+							order = 60,
+							width = "full",
+						},
+
+						builder_preview = {
+							type = "description",
+							name = function(info)
+								return info.handler:get_alias_builder_preview()
+							end,
+							order = 65,
+							width = "full",
+						},
+
+						builder_create = {
+							type = "execute",
+							name = PL["builder_create_name"],
+							desc = PL["builder_create_desc"],
+							func = function(info)
+								info.handler:create_alias_from_builder()
+							end,
+							order = 70,
+							width = "full",
+						},
+
+						advanced_header = {
+							type = "header",
+							name = PL["advanced_header"],
+							order = 80,
+						},
+
+						advanced_help = {
+							type = "description",
+							name = PL["advanced_help"],
+							order = 90,
+							width = "full",
+						},
+
+						add = {
+							type = "input",
+							name = PL["add_name"],
+							desc = PL["add_desc"],
+							get = false,
+							set = function(info, argstr)
+								return info.handler:set_alias(argstr)
+							end,
+							order = 100,
+							width = "full",
+						},
+
+						manage_existing_header = {
+							type = "header",
+							name = PL["manage_existing_header"],
+							order = 110,
+						},
+
+						del = {
+							name = PL["del_name"],
+							desc = PL["del_desc"],
+							type = "select",
+							values = function(info)
+								return info.handler:get_alias_select_values()
+							end,
+							set = function(info, aliastoremove)
+								return info.handler:delete_alias(aliastoremove)
+							end,
+							order = 120,
+							width = "full",
+							disabled = function(info)
+								return info.handler:num_aliases() == 0
+							end,
+						},
+
+						find = {
+							name = PL["find_name"],
+							desc = PL["find_desc"],
+							type = "input",
+							set = function(info, q)
+								return info.handler:list_aliases(q)
+							end,
+							get = false,
+							order = 130,
+							width = 1.5,
+						},
+
+						list = {
+							name = PL["list_name"],
+							desc = PL["list_desc"],
+							type = "execute",
+							func = function(info)
+								info.handler:list_aliases()
+							end,
+							order = 140,
+							width = 1.5,
+						},
+					},
+				},
+			behavior = {
+				type = "group",
+				name = PL["behavior_tab_name"],
+				desc = PL["behavior_tab_desc"],
+				order = 30,
+				args = {
+					behavior_help = {
+						type = "description",
+						name = PL["behavior_help"],
+						order = 10,
+						width = "full",
+					},
+
+					inline = {
+						name = PL["inline_name"],
+						desc = PL["inline_desc"],
+						type = "toggle",
+						order = 20,
+						width = "full",
+					},
+
+					no_clobber = {
+						name = PL["no_clobber_name"],
+						desc = PL["no_clobber_desc"],
+						type = "toggle",
+						order = 30,
+						width = "full",
+					},
+				},
+			},
+
+			protection = {
+				type = "group",
+				name = PL["protection_tab_name"],
+				desc = PL["protection_tab_desc"],
+				order = 40,
+				args = {
+					protection_help = {
+						type = "description",
+						name = PL["protection_help"],
+						order = 10,
+						width = "full",
+					},
+
+					protect_commands = {
+						name = PL["protect_commands_name"],
+						desc = PL["protect_commands_desc"],
+						type = "toggle",
+						order = 20,
+						width = "full",
+					},
+
+					protected_commands_header = {
+						type = "header",
+						name = PL["protected_commands_header"],
+						order = 30,
+					},
+
+					protected_commands_text = {
+						type = "description",
+						name = PL["protected_commands_text"],
+						order = 40,
+						width = "full",
+					},
+				},
+			},
+		}
+	})
+
+
+	--[[------------------------------------------------
+		BR: Retorna descrição localizada do módulo.
+		EN: Returns the localized module description.
+	------------------------------------------------]]--
+	function module:GetDescription()
+		return PL["module_desc"]
+	end
+
+	--[[------------------------------------------------
+		BR: Armazena temporariamente os campos do criador assistido de abreviações.
+		EN: Temporarily stores fields used by the assisted alias builder.
+	------------------------------------------------]]--
+	function module:get_alias_builder()
+		self.alias_builder = self.alias_builder or {
+			name = "",
+			command = "say",
+			message = "",
+		}
+
+		return self.alias_builder
+	end
+
+	function module:get_alias_builder_value(field)
+		local builder = self:get_alias_builder()
+		return builder[field] or ""
+	end
+
+	function module:set_alias_builder_value(field, value)
+		local builder = self:get_alias_builder()
+		value = tostring(value or "")
+
+		if field == "name" then
+			value = self:normalize_alias_name(value)
+		elseif field == "command" then
+			value = string.lower(value)
+		end
+
+		builder[field] = value
+	end
+
+	--[[------------------------------------------------
+		BR: Lista de destinos de bate-papo do criador assistido.
+		EN: Chat destination list used by the assisted builder.
+	------------------------------------------------]]--
+	function module:get_builder_command_values()
+		return {
+			say = PL["builder_command_say"],
+			yell = PL["builder_command_yell"],
+			party = PL["builder_command_party"],
+			raid = PL["builder_command_raid"],
+			rw = PL["builder_command_raid_warning"],
+			guild = PL["builder_command_guild"],
+			officer = PL["builder_command_officer"],
+			instance = PL["builder_command_instance"],
+			emote = PL["builder_command_emote"],
+		}
+	end
+
+	function module:get_alias_builder_preview()
+		local builder = self:get_alias_builder()
+		local name = self:normalize_alias_name(builder.name)
+		local command = tostring(builder.command or "say")
+		local message = tostring(builder.message or "")
+
+		if name == "" then
+			return PL["builder_preview_empty"]
+		end
+
+		local expansion = command .. (message ~= "" and (" " .. message) or "")
+		return string.format(PL["builder_preview_format"], name, expansion)
+	end
+
+	--[[------------------------------------------------
+		BR: Cria uma abreviação a partir dos campos separados da interface.
+		EN: Creates an alias from the separated interface fields.
+	------------------------------------------------]]--
+	function module:create_alias_from_builder()
+		local builder = self:get_alias_builder()
+		local name = self:normalize_alias_name(builder.name)
+		local command = tostring(builder.command or "")
+		local message = tostring(builder.message or "")
+
+		message = message:gsub("^%s+", ""):gsub("%s+$", "")
+
+		if name == "" then
+			self:warn_user(PL["builder_missing_alias_warning"])
+			return false
+		end
+
+		if command == "" then
+			self:warn_user(PL["builder_missing_command_warning"])
+			return false
+		end
+
+		if message == "" then
+			self:warn_user(PL["builder_missing_message_warning"])
+			return false
+		end
+
+		return self:set_alias(name .. " " .. command .. " " .. message)
+	end
+
+	--[[------------------------------------------------
+		BR: Utilitário de cores para mensagens informativas do módulo
+		EN: Color utility for module informational messages
+	------------------------------------------------]]--
+	local CLR = Prat.CLR
+
+	local function color_alias(text)
+		return CLR:Colorize("64ff64", text:lower())
+	end
+
+	local function color_expansion(text)
+		return CLR:Colorize("64ffff", text:lower())
+	end
+
+	local function color_module_name(text)
+		return CLR:Colorize("ff8080", text)
+	end
+
+	--[[------------------------------------------------
+		BR: Ativação do módulo, restauração das abreviações e registro de comandos
+		EN: Module activation, alias restoration and command registration
+	------------------------------------------------]]--
+	function module:OnModuleEnable()
+		self.Aliases = {}
+
+		table.sort(self.db.profile.aliases)
+
+		for k, v in pairs(self.db.profile.aliases) do
+			self.Aliases[k] = v
+		end
+
+		self.wont_alias = self.db.profile.wont_alias
+		for naughtyalias, _ in pairs(self.wont_alias) do
+			self.wont_alias[string.lower(naughtyalias)] = 1
+		end
+
+		if Prat.IsRetail then
+			self.registered_alias_commands = {}
+			self:register_all_alias_commands()
+		else
+			self:RawHook('ChatEdit_HandleChatType', true)
+		end
+
+		Prat.RegisterChatCommand("alias", function(argstr)
+			return self:set_alias(argstr)
+		end)
+		Prat.RegisterChatCommand("unalias", function(argstr)
+			return self:delete_alias(argstr)
+		end)
+		Prat.RegisterChatCommand("listaliases", function(argstr)
+			return self:list_aliases(argstr)
+		end)
+	end
+
+	--[[------------------------------------------------
+		BR: Desativação do módulo e remoção dos hooks ativos
+		EN: Module deactivation and active hook removal
+	------------------------------------------------]]--
+	function module:OnModuleDisable()
+		self:UnhookAll()
+		self.Aliases = nil
+	end
+
+	--[[------------------------------------------------
+		Core Functions
+	------------------------------------------------]] --
+	--[[------------------------------------------------
+		BR: Gera a chave interna usada pelo sistema de comandos de barra ( / )
+		EN: Generates the internal key used by the slash command system
+	------------------------------------------------]]--
+	function module:get_alias_command_key(alias)
+		return "PRATALIAS_" .. string.upper(alias)
+	end
+
+	--[[------------------------------------------------
+		BR: Normaliza nomes de abreviações para comparar comandos de barra ( / ).
+		EN: Normalizes alias names for slash command comparison.
+	------------------------------------------------]]--
+	function module:normalize_alias_name(alias)
+		alias = tostring(alias or "")
+		alias = alias:gsub("^%s+", ""):gsub("%s+$", "")
+		alias = alias:gsub("^/*", "")
+		return string.lower(alias)
+	end
+
+	--[[------------------------------------------------
+		BR: Procura comandos de barra ( / ) já registrados pelo jogo, pelo Prat ou por outros addons.
+		    Quando ignorePratAliasCommands estiver ativo, os comandos criados por este próprio módulo são ignorados.
+		EN: Searches for slash commands already registered by the game, Prat, or other addons.
+		    When ignorePratAliasCommands is enabled, commands created by this module are ignored.
+	------------------------------------------------]]--
+	function module:find_registered_slash_command(alias, ignorePratAliasCommands)
+		alias = self:normalize_alias_name(alias)
+		if alias == "" then
+			return nil
+		end
+
+		local slashCommand = "/" .. alias
+
+		for globalName, value in pairs(_G) do
+			if type(globalName) == "string" and type(value) == "string" then
+				if globalName:match("^SLASH_.+%d+$") and string.lower(value) == slashCommand then
+					if not (ignorePratAliasCommands and globalName:match("^SLASH_PRATALIAS_")) then
+						return globalName
+					end
+				end
+			end
+		end
+
+		if _G.hash_ChatTypeInfoList and _G.hash_ChatTypeInfoList[slashCommand] then
+			return "hash_ChatTypeInfoList"
+		end
+
+		if _G.hash_EmoteTokenList and _G.hash_EmoteTokenList[slashCommand] then
+			return "hash_EmoteTokenList"
+		end
+
+		return nil
+	end
+
+	--[[------------------------------------------------
+		BR: Registra dinamicamente um comando de barra ( / ) para a abreviação informada
+		EN: Dynamically registers a slash command for the given alias
+	------------------------------------------------]]--
+	function module:register_alias_command(alias)
+		alias = self:normalize_alias_name(alias)
+
+		if alias == "" or self.registered_alias_commands[alias] then
+			return false
+		end
+
+		if self.db.profile.protect_commands then
+			local conflict = self:find_registered_slash_command(alias, true)
+			if conflict then
+				self:warn_user(string.format(PL["saved_alias_conflict_warning"], color_alias(alias)))
+				return false
+			end
+		end
+
+		local key = self:get_alias_command_key(alias)
+
+		_G["SLASH_" .. key .. "1"] = "/" .. alias
+		SlashCmdList[key] = function(msg)
+			module:execute_alias(alias, msg or "")
+		end
+
+		self.registered_alias_commands[alias] = true
+		return true
+	end
+
+	--[[------------------------------------------------
+		BR: Remove o comando de barra ( / ) criado por este módulo para uma abreviação.
+		EN: Removes the slash command created by this module for an alias.
+	------------------------------------------------]]--
+	function module:unregister_alias_command(alias)
+		alias = self:normalize_alias_name(alias)
+		if alias == "" then
+			return
+		end
+
+		local key = self:get_alias_command_key(alias)
+		_G["SLASH_" .. key .. "1"] = nil
+		SlashCmdList[key] = nil
+
+		if self.registered_alias_commands then
+			self.registered_alias_commands[alias] = nil
+		end
+	end
+
+	function module:register_all_alias_commands()
+		if not self.registered_alias_commands then
+			self.registered_alias_commands = {}
+		end
+
+		for alias in pairs(self.Aliases) do
+			self:register_alias_command(alias)
+		end
+	end
+
+	--[[------------------------------------------------
+		BR: Divide a entrada do usuário entre nome da abreviação e expansão
+		EN: Splits user input into alias name and expansion value
+	------------------------------------------------]]--
+	function module:split_alias_args(str)
+		local args = {
+			name = "",
+			value = "",
+		}
+
+		for alias, command in str:gmatch("/?(%w+)%s*[%s=]%s*/?(.-)$") do
+			args['name'] = self:normalize_alias_name(alias)
+			args['value'] = command or ""
+		end
+		return args
+	end
+
+	--[[------------------------------------------------
+		BR: Valida argumentos antes de operações críticas de abreviação
+		EN: Validates arguments before critical alias operations
+	------------------------------------------------]]--
+	function module:check_arg_str(funcname, argstr)
+		if argstr == nil then
+			self:warn_user(string.format(PL["nil_argument_error"], funcname))
+			return false
+		end
+
+		if argstr == "" then
+			self:warn_user(string.format(PL["blank_argument_error"], funcname))
+			return false
+		end
+
+		return true
+	end
+
+	--[[------------------------------------------------
+		BR: Cria, atualiza ou consulta uma abreviação existente
+		EN: Creates, updates or queries an existing alias
+	------------------------------------------------]]--
+	function module:set_alias(argstr)
+		if not self:check_arg_str('set_alias', argstr) then
+			return false
+		end
+
+		--[[------------------------------------------------
+			BR: Aceita também o comando completo no campo da interface.
+			    Isso evita que o usuário cole "/alias oi say Olá" e acabe tentando criar uma abreviação chamada "alias".
+			EN: Also accepts the full command inside the options field.
+			    This prevents users from pasting "/alias hi say Hello" and accidentally trying to create an alias named "alias".
+		------------------------------------------------]]--
+		argstr = argstr:gsub("^%s+", ""):gsub("%s+$", "")
+		argstr = argstr:gsub("^/?alias%s+", "", 1)
+
+		if not self:check_arg_str('set_alias', argstr) then
+			return false
+		end
+
+		local alias = self:split_alias_args(argstr)
+
+		-- Check to see if the user is defining an alias or not
+		if not alias['value'] or (alias['value'] == "") then
+			local name = argstr:gsub('^/*', ''):lower()
+
+			-- Called as: /alias <command> - check for alias called <command> to display
+			if self.Aliases[name] then
+				-- Alias found; show it :)
+				self:show_alias(name)
+				return true
+			else
+				-- No alias found called <command>; tell user
+				self:report_undefined_alias(name)
+			end
+		elseif self.wont_alias[string.lower(alias['name'])] then
+			-- User is defining an alias called <command>, but it's potentially bad
+			self:warn_user(string.format(PL["protected_alias_warning"], color_alias(alias['name'])))
+			return false
+		elseif self.db.profile.protect_commands and self:find_registered_slash_command(alias['name'], true) then
+			-- BR: Evita criar abreviações que conflitem com comandos do jogo ou de outros addons.
+			-- EN: Prevents aliases from conflicting with game or other addon commands.
+			self:warn_user(string.format(PL["existing_command_conflict_warning"], color_alias(alias['name'])))
+			return false
+		elseif self.db.profile.no_clobber and self.Aliases[string.lower(alias['name'])] then
+			self:warn_user(string.format(PL["no_clobber_warning"], color_alias(alias['name']), color_expansion(alias['value'])))
+			return false
+		else
+			-- It's not listed as bad, so create or update the aliases tables
+			-- called as /alias <command> <value> - define alias <command> as <value>
+			if self.Aliases[alias['name']] then
+				-- Specified alias already exists, warn user and print old setting
+				self:warn_user(string.format(PL["overwrite_alias_warning"], color_alias(alias['name']), color_expansion(self.Aliases[alias['name']])))
+			end
+
+			-- Now (re?)define the alias <command> to <value>
+			self.Aliases[alias['name']] = alias['value']
+			self.db.profile.aliases[alias['name']] = alias['value']
+
+			table.sort(self.db.profile.aliases)
+			table.sort(self.Aliases)
+
+			LibStub("AceConfigRegistry-3.0"):NotifyChange("Prat")
+
+			self:warn_user(string.format(PL["alias_created_message"], color_alias(alias['name']), color_expansion(alias['value'])))
+		end
+		if Prat.IsRetail then
+			self:register_alias_command(alias['name'])
+		end
+	end
+
+	function module:delete_alias(aliasname)
+		if not self:check_arg_str('delete_alias', aliasname) then
+			return false
+		end
+
+		-- Remove unecessary /s at the beginning of the alias name
+		aliasname = self:normalize_alias_name(aliasname)
+
+		if not self.Aliases[aliasname] then
+			self:warn_user(string.format(PL["alias_missing_message"], color_alias(aliasname)))
+			return false
+		end
+
+		local oldalias = self.Aliases[aliasname]
+
+		self:warn_user(string.format(PL["alias_deleted_message"], color_alias(aliasname), color_expansion(oldalias)))
+
+		self.Aliases[aliasname] = nil
+		self.db.profile.aliases[aliasname] = nil
+
+		if Prat.IsRetail then
+			self:unregister_alias_command(aliasname)
+		end
+
+		LibStub("AceConfigRegistry-3.0"):NotifyChange("Prat")
+
+		return oldalias
+	end
+
+	function module:show_alias(aliasname)
+		if not self:check_arg_str('show_alias', aliasname) then
+			return false
+		end
+
+		-- Check for undefined alias called aliasname
+		if not self.Aliases[aliasname] then
+			self:warn_user(string.format(PL["alias_internal_missing_warning"], color_alias(aliasname)))
+			return false
+		end
+
+		-- Everything OK; display value of alias "aliasname"
+		self:warn_user(string.format(PL["alias_value_message"], color_alias(aliasname), color_expansion(self.Aliases[aliasname])))
+
+		return true
+	end
+
+	--[[------------------------------------------------
+		BR: Lista aliases existentes ou filtra por termo de busca
+		EN: Lists existing aliases or filters them by search term
+	------------------------------------------------]]--
+	function module:list_aliases(q)
+		if self:num_aliases() == 0 then
+			self:warn_user(PL["no_aliases_message"])
+			return false
+		end
+
+		table.sort(self.Aliases)
+
+		local count = 0
+		for name, _ in pairs(self.Aliases) do
+			if not q or (name:match(q)) then
+				self:show_alias(name)
+				count = count + 1
+			end
+		end
+
+		self:tell_user(string.format(q and PL["matching_aliases_message"] or PL["total_aliases_message"], count))
+	end
+
+	function module:report_undefined_alias(name)
+		return self:warn_user(string.format(PL["undefined_alias_message"], color_alias(name)))
+	end
+
+	function module:tell_user(str)
+		return module:warn_user(str)
+	end
+
+	function module:num_aliases()
+		if not self.Aliases then
+			return 0
+		end
+
+		local n = 0
+		for _, _ in pairs(self.Aliases) do
+			n = n + 1
+		end
+		return n
+	end
+
+	--[[------------------------------------------------
+		BR: Monta a lista exibida no seletor de remoção de abreviações.
+		EN: Builds the list shown in the alias removal selector.
+	------------------------------------------------]]--
+	function module:get_alias_select_values()
+		local values = {}
+
+		if not self.Aliases then
+			return values
+		end
+
+		for name, expansion in pairs(self.Aliases) do
+			values[name] = string.format(PL["alias_select_format"], name, tostring(expansion or ""))
+		end
+
+		return values
+	end
+
+	function module:warn_user(str)
+		if str == nil then
+			str = PL["warn_nil_argument_error"]
+		elseif str == "" then
+			str = PL["warn_empty_string_error"]
+		end
+
+		Prat:Print(string.format("%s: %s", color_module_name(self.moduleName), str))
+	end
+
+	--[[------------------------------------------------
+		BR: Comandos de bate-papo mais comuns que podem ser executados diretamente.
+		    Isso evita depender de tabelas internas da Blizzard que podem mudar entre clientes.
+		EN: Most common chat commands that can be executed directly.
+		    This avoids relying on Blizzard internal tables that may change between clients.
+	------------------------------------------------]]--
+	local chat_command_types = {
+		s = "SAY",
+		say = "SAY",
+		dizer = "SAY",
+		falar = "SAY",
+
+		y = "YELL",
+		yell = "YELL",
+		gritar = "YELL",
+
+		p = "PARTY",
+		party = "PARTY",
+		grupo = "PARTY",
+
+		ra = "RAID",
+		raid = "RAID",
+		raide = "RAID",
+
+		rw = "RAID_WARNING",
+		avisoraide = "RAID_WARNING",
+		avisoderaide = "RAID_WARNING",
+		["aviso_de_raide"] = "RAID_WARNING",
+
+		g = "GUILD",
+		guild = "GUILD",
+		guilda = "GUILD",
+
+		o = "OFFICER",
+		officer = "OFFICER",
+		oficial = "OFFICER",
+
+		i = "INSTANCE_CHAT",
+		instance = "INSTANCE_CHAT",
+		instancia = "INSTANCE_CHAT",
+		["instância"] = "INSTANCE_CHAT",
+		bg = "INSTANCE_CHAT",
+
+		e = "EMOTE",
+		em = "EMOTE",
+		emote = "EMOTE",
+		me = "EMOTE",
+		eu = "EMOTE",
+	}
+
+	--[[------------------------------------------------
+		BR: Normaliza comandos de barra ( / ) para comparação interna.
+		EN: Normalizes slash ( / ) commands for internal comparison.
+	------------------------------------------------]]--
+	local function normalize_slash_command_name(command)
+		command = tostring(command or "")
+		command = command:gsub("^/+", "")
+		command = command:gsub("^%s+", ""):gsub("%s+$", "")
+		return string.lower(command)
+	end
+
+	--[[------------------------------------------------
+		BR: Adiciona à tabela de comandos os aliases reais registrados pelo cliente.
+			Isso permite reconhecer comandos localizados como /dizer quando o cliente os expõe.
+		EN: Adds the real command aliases registered by the client to the command table.
+			This allows recognizing localized commands such as /dizer when exposed by the client.
+	------------------------------------------------]]--
+	local function add_registered_chat_slash_commands(chatType, ...)
+		for argIndex = 1, select("#", ...) do
+			local prefix = select(argIndex, ...)
+			for i = 1, 20 do
+				local command = _G[prefix .. i]
+				if not command then
+					break
+				end
+
+				local normalized = normalize_slash_command_name(command)
+				if normalized ~= "" then
+					chat_command_types[normalized] = chatType
+				end
+			end
+		end
+	end
+
+	add_registered_chat_slash_commands("SAY", "SLASH_SAY")
+	add_registered_chat_slash_commands("YELL", "SLASH_YELL")
+	add_registered_chat_slash_commands("PARTY", "SLASH_PARTY")
+	add_registered_chat_slash_commands("RAID", "SLASH_RAID")
+	add_registered_chat_slash_commands("RAID_WARNING", "SLASH_RAID_WARNING", "SLASH_RAIDWARN")
+	add_registered_chat_slash_commands("GUILD", "SLASH_GUILD")
+	add_registered_chat_slash_commands("OFFICER", "SLASH_OFFICER")
+	add_registered_chat_slash_commands("INSTANCE_CHAT", "SLASH_INSTANCE_CHAT", "SLASH_INSTANCE")
+	add_registered_chat_slash_commands("EMOTE", "SLASH_EMOTE", "SLASH_TEXT_EMOTE", "SLASH_ME")
+
+	-- Retail logic
+	--[[------------------------------------------------
+		BR: Executa uma abreviação registrada como comando de barra ( / ) no Retail.
+		    A checagem de lockdown é protegida porque a API pode não existir em todos os clientes.
+		EN: Executes an alias registered as a slash command on Retail.
+		    The lockdown check is guarded because the API may not exist in every client.
+	------------------------------------------------]]--
+	function module:execute_alias(aliasName, msg)
+		if is_chat_messaging_locked_down() then
+			return
+		end
+
+		local alias = self.Aliases[string.lower(aliasName)]
+		if not alias or alias == "" then
+			self:report_undefined_alias(aliasName)
+			return
+		end
+
+		alias = Prat:ReplaceMatches(alias, 'OUTBOUND')
+		msg = msg or ""
+
+		-- Extract target command
+		local newcmd = strmatch(alias, "^/*([^%s]+)") or ""
+		local premsg = strsub(alias, strlen(newcmd) + 2) or ""
+
+		if premsg ~= "" then
+			msg = premsg .. (msg ~= "" and (" " .. msg) or "")
+		end
+
+		if msg and msg ~= "" then
+			local fake = {}
+			fake.MESSAGE = msg
+
+			Prat.Addon:ProcessUserEnteredChat(fake)
+
+			msg = fake.MESSAGE
+		end
+
+		local cmd = newcmd:upper()
+		local lowercmd = normalize_slash_command_name(newcmd)
+
+		--[[------------------------------------------------
+			BR: Envia diretamente comandos comuns de bate-papo, como /say, /guild e /party.
+			    Exemplo: uma abreviação "oi say Olá" executa /say Olá.
+			EN: Directly sends common chat commands, such as /say, /guild and /party.
+			    Example: an alias "hi say Hello" executes /say Hello.
+		------------------------------------------------]]--
+		local chatType = chat_command_types[lowercmd]
+		if chatType and msg ~= "" then
+			if send_chat_message_compat(msg, chatType) then
+				return true
+			end
+
+			self:warn_user(PL["chat_send_unavailable_warning"])
+			return false
+		end
+
+		-- Slash command
+		local slashCmd = SlashCmdList[cmd]
+		if slashCmd then
+			slashCmd(msg)
+			return
+		end
+		-- Chat Type
+		local chatCmd = hash_ChatTypeInfoList and (hash_ChatTypeInfoList['/' .. newcmd] or hash_ChatTypeInfoList['/' .. lowercmd] or hash_ChatTypeInfoList['/' .. cmd])
+		if chatCmd and ChatEdit_ChooseBoxForSend then
+			local editBox = ChatEdit_ChooseBoxForSend()
+			if editBox and editBox.ProcessChatType and editBox:ProcessChatType(msg, chatCmd, 1) then
+				local type = editBox:GetChatType();
+				local text = editBox:GetText();
+				if strfind(text, "%s*[^%s]+") then
+					text = ChatFrameUtil.SubstituteChatMessageBeforeSend(text)
+					if type == "WHISPER" then
+						local target = editBox:GetTellTarget()
+						ChatFrameUtil.SetLastToldTarget(target, type)
+						send_chat_message_compat(text, type, editBox.languageID, target)
+					elseif type == "BN_WHISPER" then
+						local target = editBox:GetTellTarget();
+						local bnetIDAccount = BNet_GetBNetIDAccount(target)
+						if bnetIDAccount then
+							ChatFrameUtil.SetLastToldTarget(target, type)
+							C_BattleNet.SendWhisper(bnetIDAccount, text)
+						else
+							ChatFrameUtil.DisplaySystemMessageInPrimary(format(BN_UNABLE_TO_RESOLVE_NAME, target))
+						end
+					elseif type == "CHANNEL" then
+						send_chat_message_compat(text, type, editBox.languageID, editBox:GetChannelTarget())
+					else
+						send_chat_message_compat(text, type, editBox.languageID)
+					end
+				end
+				return
+			end
+		end
+		-- Emote
+		local emoteCmd = hash_EmoteTokenList and (hash_EmoteTokenList['/' .. newcmd] or hash_EmoteTokenList['/' .. lowercmd] or hash_EmoteTokenList['/' .. cmd])
+		if emoteCmd and _G.C_ChatInfo and _G.C_ChatInfo.PerformEmote then
+			_G.C_ChatInfo.PerformEmote(emoteCmd, msg)
+			return true
+		end
+
+		self:warn_user(string.format(PL["unknown_command_warning"], color_expansion(newcmd)))
+		return false
+	end
+
+	-- Classic logic
+	--[[------------------------------------------------
+		BR: Intercepta comandos no fluxo clássico do chat
+		EN: Intercepts commands in the classic chat flow
+	------------------------------------------------]]--
+	function module:ChatEdit_HandleChatType(editBox, msg, command, send)
+		command = command or ""
+		msg = msg or ""
+		local alias = self.Aliases[string.lower(strsub(command, 2))]
+
+		if not alias or alias == "" then
+			return self.hooks["ChatEdit_HandleChatType"](editBox, msg, command, send)
+		end
+
+		alias = Prat:ReplaceMatches(alias, 'OUTBOUND')
+
+		local newcmd = strmatch(alias, "^/*([^%s]+)") or ""
+		local premsg = strsub(alias, strlen(newcmd) + 2) or ""
+
+		if premsg ~= "" then
+			msg = premsg .. ' ' .. msg
+		end
+
+		command = '/' .. string.upper(newcmd) -- this needs to be upper
+		local text = string.lower(command) -- this needs to be lower
+
+		if msg and msg ~= "" then
+			local fake = {}
+			fake.MESSAGE = msg
+
+			Prat.Addon:ProcessUserEnteredChat(fake)
+
+			msg = fake.MESSAGE
+			text = text .. ' ' .. msg
+		end
+
+		if (send == 1) then
+			editBox:SetText(text)
+			ChatEdit_ParseText(editBox, send)
+		elseif (self.db.profile.inline) then
+			editBox:SetText(text .. ' ')
+		end
+		return true
+	end
+
+	--[[------------------------------------------------
+		BR: Aliases legados preservados para compatibilidade interna/externa.
+		EN: Legacy aliases preserved for internal/external compatibility.
+	------------------------------------------------]]--
+	module.GetAliasBuilder = module.get_alias_builder
+	module.GetAliasBuilderValue = module.get_alias_builder_value
+	module.SetAliasBuilderValue = module.set_alias_builder_value
+	module.GetBuilderCommandValues = module.get_builder_command_values
+	module.GetAliasBuilderPreview = module.get_alias_builder_preview
+	module.CreateAliasFromBuilder = module.create_alias_from_builder
+	module.GetAliasCommandKey = module.get_alias_command_key
+	module.NormalizeAliasName = module.normalize_alias_name
+	module.FindRegisteredSlashCommand = module.find_registered_slash_command
+	module.RegisterAliasCommand = module.register_alias_command
+	module.UnregisterAliasCommand = module.unregister_alias_command
+	module.RegisterAllAliasCommands = module.register_all_alias_commands
+	module.splitAliasArgs = module.split_alias_args
+	module.checkArgStr = module.check_arg_str
+	module.setAlias = module.set_alias
+	module.delAlias = module.delete_alias
+	module.showAlias = module.show_alias
+	module.listAliases = module.list_aliases
+	module.reportUndefinedAlias = module.report_undefined_alias
+	module.tellUser = module.tell_user
+	module.NumAliases = module.num_aliases
+	module.GetAliasSelectValues = module.get_alias_select_values
+	module.warnUser = module.warn_user
+	module.ExecuteAlias = module.execute_alias
+
+end)
